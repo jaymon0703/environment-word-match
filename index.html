@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ranger Match</title>
+  <style>
+    :root {
+      --ink: #1a2e24;
+      --muted: #4d6156;
+      --faint: #6d7f74;
+      --line: #d5ddd4;
+      --paper: #f3f1ea;
+      --card: #fffdf8;
+      --green: #1d6b43;
+      --green-soft: #e7f5ec;
+      --ok: #e5f6ea;
+      --warn: #fff4e5;
+      --info: #e8f2f6;
+      --danger: #f8e8e6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font: 17px/1.45 "Iowan Old Style", Palatino, Georgia, serif;
+    }
+    main {
+      max-width: 880px;
+      margin: 0 auto;
+      padding: 28px 20px 64px;
+    }
+    h1, h2, h3 { font-family: "Avenir Next", "Segoe UI", sans-serif; line-height: 1.2; margin: 0; }
+    h1 { font-size: 32px; }
+    h2 { font-size: 22px; margin-top: 8px; }
+    h3 { font-size: 16px; letter-spacing: 0.02em; }
+    p { margin: 0; }
+    .stack { display: flex; flex-direction: column; gap: 14px; }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .spread { justify-content: space-between; align-items: flex-end; }
+    .muted { color: var(--muted); }
+    .faint { color: var(--faint); font-size: 14px; }
+    .strong { font-weight: 700; }
+    button, .chip {
+      font: 16px/1.3 "Avenir Next", "Segoe UI", sans-serif;
+      cursor: pointer;
+    }
+    .btn {
+      border-radius: 8px;
+      padding: 10px 14px;
+      border: 1px solid transparent;
+    }
+    .btn.primary { background: var(--green); color: white; }
+    .btn.secondary { background: var(--card); color: var(--ink); border-color: var(--line); }
+    .btn.ghost { background: transparent; color: var(--muted); border-color: transparent; padding-left: 8px; }
+    .chip, .meaning {
+      border: 1px solid var(--line);
+      background: var(--card);
+      color: var(--ink);
+      border-radius: 8px;
+    }
+    .chip { padding: 8px 12px; }
+    .chip.selected, .meaning.selected { border-color: var(--green); background: var(--green-soft); }
+    .chip.done, .meaning.done { background: #ebe8e0; color: var(--muted); cursor: default; }
+    .meaning {
+      width: 100%;
+      display: flex;
+      gap: 10px;
+      text-align: left;
+      padding: 12px;
+    }
+    .letter { width: 22px; flex: none; font-weight: 700; color: var(--green); }
+    .meaning.done .letter { color: var(--faint); }
+    .match-note { display: block; margin-top: 4px; color: var(--faint); font-size: 13px; }
+    .stats { display: flex; gap: 18px; }
+    .stat b { display: block; font-family: "Avenir Next", "Segoe UI", sans-serif; font-size: 26px; }
+    .stat span { color: var(--faint); font-size: 13px; }
+    .stat.hot b { color: var(--green); }
+    .callout { border-radius: 8px; padding: 12px 14px; }
+    .callout.success { background: var(--ok); }
+    .callout.warning { background: var(--warn); }
+    .callout.info { background: var(--info); }
+    .callout strong { display: block; margin-bottom: 4px; font-family: "Avenir Next", "Segoe UI", sans-serif; }
+    table { width: 100%; border-collapse: collapse; background: var(--card); font-size: 15px; }
+    th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+    th { font-family: "Avenir Next", "Segoe UI", sans-serif; font-size: 13px; }
+    tr.redo td:first-child { box-shadow: inset 3px 0 0 #a33b32; }
+    tr.tighten td:first-child { box-shadow: inset 3px 0 0 #b8860b; }
+    .review + .review { padding-top: 4px; }
+  </style>
+</head>
+<body>
+  <main id="app"></main>
+  <script>
+    const LETTERS = ["A", "B", "C", "D", "E", "F", "G"];
+    const MISSIONS = [
+      { title: "Mission 1 · The big picture", aim: "Variety, homes, survival traits, and climate. Four of these words get swapped on quizzes." },
+      { title: "Mission 2 · The kingdoms", aim: "Who makes food, who eats, who breaks things down, and whose cells have a nucleus." },
+      { title: "Mission 3 · Who interacts", aim: "Who benefits, who gets hurt, and which species belong. You already have mutualism and parasitism." }
+    ];
+    const TERMS = [
+      { id: "biodiversity", term: "Biodiversity", round: 0, definition: "The variety of different living things in a place.", example: "A marsh with many kinds of birds, insects, plants, and frogs.", hint: "This is about different kinds of life. A huge flock of one kind of bird is a different idea.", review: "The variety of different living things in a place. A marsh full of different birds, insects, plants, and frogs has high biodiversity. A crowd of one species is just a crowd." },
+      { id: "species-diversity", term: "Species diversity", round: 0, definition: "The number of different species living in one area.", example: "A meadow with 30 kinds of plants, next to a lawn of one grass.", hint: "Count the species. This one is the species count in a shared area.", review: "The number of different species living in one area. A meadow with 30 kinds of plants has more species diversity than a lawn of one grass. Keep this sentence different from biodiversity." },
+      { id: "ecosystem", term: "Ecosystem", round: 0, definition: "The living things in a place, the non-living things around them, and how they interact.", example: "A pond: fish, algae, insects, water, mud, and sunlight.", hint: "Include the non-living parts: water, air, soil, and sunlight. Then include how they affect each other.", review: "The living things in a place, the non-living things around them, and how they interact. A pond ecosystem is the fish, algae, insects, water, mud, and sunlight together. If the class says biotic and abiotic: biotic means living, abiotic means non-living." },
+      { id: "habitat", term: "Habitat", round: 0, definition: "The place where one kind of living thing gets food, water, shelter, and space.", example: "A woodpecker's habitat is trees it can nest and feed in.", hint: "This is one living thing's home base: food, water, shelter, and space.", review: "The place where one kind of living thing gets food, water, shelter, and space. A woodpecker's habitat is trees it can nest and feed in. The whole forest system is the ecosystem." },
+      { id: "adaptation", term: "Adaptation", round: 0, definition: "A body feature or a behavior that helps a living thing survive where it lives.", example: "A duck's webbed feet. A bear hibernating through winter.", hint: "Look for a built-in feature or behavior. Webbed feet. Thick fur. Hibernating.", review: "A body feature or a behavior that helps a living thing survive where it lives. Webbed feet and hibernating are adaptations. Packing up and moving house is a change of address." },
+      { id: "climate", term: "Climate change", round: 0, definition: "A long-term shift in temperature and weather patterns, measured over many years.", example: "Warmer winters and less ice on the Great Lakes over many years.", hint: "Think years and years, the pattern itself. One strange day has its own word: weather.", review: "A long-term shift in temperature and weather patterns, measured over many years. Warmer winters and less lake ice, over decades, are climate change. One odd storm is weather." },
+      { id: "classification", term: "Classification", round: 0, definition: "Sorting living things into groups based on features they share.", example: "Every animal with feathers is grouped as a bird.", hint: "This is the sorting. Shared features, like feathers or fur, decide the group.", review: "Sorting living things into groups based on features they share. Feathers put an animal with the birds. A yes/no key is one tool you can use while you classify." },
+      { id: "kingdoms", term: "Kingdoms", round: 1, definition: "The largest groups used to classify life in this unit: animals, plants, fungi, protists, and monera.", example: "A robin goes in animals. A pine goes in plants. A mushroom goes in fungi.", hint: "The biggest bins. Animals are one of them. There are five in this unit.", review: "The largest groups used to classify life in this unit: animals, plants, fungi, protists, and monera. A robin in the animal kingdom is a strong example. Plants, fungi, protists, and monera are kingdoms too." },
+      { id: "plants", term: "Plants", round: 1, definition: "Living things that make their own food using sunlight.", example: "Maple trees, grass, and moss. They release oxygen while they make food.", hint: "They build their own food from sunlight. Oxygen is what they give off while they do it.", review: "Living things that make their own food using sunlight. Maple trees, grass, and moss do this, and they release oxygen while they make food. The food-making is the definition." },
+      { id: "animals", term: "Animals", round: 1, definition: "Living things that must eat food. Most of them can move.", example: "Robins, trout, beetles, and humans.", hint: "They have to eat. They cannot make food from sunlight the way plants can.", review: "Living things that must eat food. Most of them can move. Robins, trout, beetles, and humans are animals. Plants make food. Animals eat it." },
+      { id: "fungi", term: "Fungi", round: 1, definition: "Living things that absorb food from material they break down. They are not plants.", example: "Mushrooms, mold, and yeast.", hint: "They break material down and absorb it. Mushrooms, mold, yeast. Algae sits in a different kingdom.", review: "Living things that absorb food from material they break down. They are not plants. Mushrooms, mold, and yeast are fungi. In this unit, algae are protists." },
+      { id: "protists", term: "Protists", round: 1, definition: "Mostly single-celled living things that have a nucleus, and are not plants, animals, fungi, or bacteria.", example: "An amoeba, a paramecium, and many kinds of algae.", hint: "Tiny, and the cell has a nucleus. Amoeba and algae belong here.", review: "Mostly single-celled living things that have a nucleus, and are not plants, animals, fungi, or bacteria. A nucleus is the control center in the cell. Amoebas and many algae are protists." },
+      { id: "monera", term: "Monera", round: 1, definition: "The kingdom of bacteria: single-celled living things whose cells have no nucleus.", example: "The bacteria that turn milk into yogurt.", hint: "This is the kingdom. One cell, and no nucleus inside it.", review: "The kingdom of bacteria: single-celled living things whose cells have no nucleus. No nucleus means no control center in the cell. That is the split from protists. Yogurt bacteria belong here." },
+      { id: "bacteria", term: "Bacteria", round: 1, definition: "Single-celled living things with no nucleus. They belong to the Monera kingdom.", example: "Helpful gut bacteria, and the bacteria that cause strep throat.", hint: "The living things inside Monera. One cell, no nucleus. Some help and some harm.", review: "Single-celled living things with no nucleus. They belong to the Monera kingdom. Gut bacteria help you digest. Other bacteria can make you sick." },
+      { id: "symbiosis", term: "Symbiosis", round: 2, definition: "A close, long-lasting relationship between two different species.", example: "A clownfish living among the tentacles of a sea anemone.", hint: "The big word. Mutualism, commensalism, and parasitism are the three kinds.", review: "A close, long-lasting relationship between two different species. A clownfish with a sea anemone is one example. Mutualism, commensalism, and parasitism are the three types." },
+      { id: "mutualism", term: "Mutualism", round: 2, definition: "A symbiotic relationship in which both living things benefit.", example: "A bee gets nectar, and the flower gets pollinated.", hint: "Both sides get something good. Think bees and flowers.", review: "A symbiotic relationship in which both living things benefit. The bee gets nectar. The flower gets pollinated." },
+      { id: "commensalism", term: "Commensalism", round: 2, definition: "A symbiotic relationship in which one living thing benefits and the other is unaffected.", example: "A barnacle riding on a whale.", hint: "One side gets a benefit. The other side is left about the same, unharmed and unhelped.", review: "A symbiotic relationship in which one living thing benefits and the other is unaffected. A barnacle on a whale gets a free ride. The whale is unharmed and gets nothing from it." },
+      { id: "parasitism", term: "Parasitism", round: 2, definition: "A symbiotic relationship in which one living thing benefits and the other is harmed.", example: "A tick feeding on a dog.", hint: "One side gains. The other side gets hurt. A tick on a dog.", review: "A symbiotic relationship in which one living thing benefits and the other is harmed. The tick gets a meal. The dog is harmed." },
+      { id: "competition", term: "Competition", round: 2, definition: "When living things need the same limited resource, such as food, water, space, or light.", example: "Tree seedlings in a forest all reaching for sunlight.", hint: "Same need, not enough to go around. Food, water, space, or light.", review: "When living things need the same limited resource, such as food, water, space, or light. Seedlings reaching for the same sunlight are competing. A fight over land is only one kind." },
+      { id: "native", term: "Native species", round: 2, definition: "A species that lives and reproduces in an area on its own, without people bringing it there.", example: "Beaver and sugar maple in Ontario.", hint: "It belongs in that ecosystem on its own. People did not carry it in.", review: "A species that lives and reproduces in an area on its own, without people bringing it there. Beaver and sugar maple are native to Ontario. Long history is the right idea. Say that it belongs there naturally." },
+      { id: "invasive", term: "Invasive species", round: 2, definition: "A species brought into a new area that spreads and harms the living things already there.", example: "Zebra mussels in the Great Lakes.", hint: "Brought into a new place, then it spreads and causes harm. Zebra mussels are the classic example.", review: "A species brought into a new area that spreads and harms the living things already there. Zebra mussels in the Great Lakes are an invasive species. Harm in a new place is the whole idea." }
+    ];
+    const FIXES = [
+      ["redo", "Adaptation", "Changing the place you are in.", "A body feature or behavior that helps it survive. Webbed feet, thick fur, hibernating. Moving house is a change of address."],
+      ["redo", "Classification", "Where you say yes to something.", "Sorting living things by features they share. A yes/no key is a tool for classifying. The definition is the sorting."],
+      ["redo", "Fungi", "Like rotten. Algae is like fungi.", "They absorb food from material they break down. The rotten idea belongs. Mushrooms, mold, yeast. Algae are protists in this unit."],
+      ["redo", "Animals", "Left blank.", "Living things that must eat food. Most can move. They do not make food from sunlight."],
+      ["redo", "Commensalism", "Like parasitism, but one is not benefiting and not harmed.", "One benefits. The other is unaffected: unharmed, and it gets nothing. A barnacle on a whale."],
+      ["tighten", "Biodiversity", "A lot of living things living together.", "The variety of different kinds of life. A hundred of the same animal is a crowd, which is a different idea."],
+      ["tighten", "Ecosystem", "A bunch of animals live together.", "Living things, non-living things (water, air, soil, sunlight), and how they interact."],
+      ["tighten", "Habitat", "Where a family lives.", "Where one kind of living thing gets food, water, shelter, and space. A woodpecker's trees. A beaver's pond."],
+      ["tighten", "Kingdoms", "Where you put animals. Bird in the animal kingdom.", "Keep the bird example. Kingdoms are the five big groups: animals, plants, fungi, protists, and monera."],
+      ["tighten", "Plants", "Something we get oxygen from.", "They make their own food using sunlight. Oxygen comes out while they do that. Keep trees as the example."],
+      ["tighten", "Monera", "A kingdom with one cell.", "Add the quiz detail: those cells have no nucleus. That is how you tell them from protists."],
+      ["tighten", "Bacteria", "A single-cell organism.", "One cell, no nucleus, in the Monera kingdom. Some help, like gut bacteria. Some cause illness."],
+      ["tighten", "Symbiosis", "Two organisms live together.", "A close, long-lasting relationship between two different species. Name the three types under it."],
+      ["tighten", "Competition", "Fight for their land.", "They need the same limited resource: food, water, space, or light. Seedlings and sunlight is a clean example."],
+      ["tighten", "Invasive species", "Moves somewhere else and harms it.", "Brought into a new area, spreads, and harms what already lives there. Zebra mussels in the Great Lakes."],
+      ["tighten", "Native species", "Lived there for a thousand years.", "Lives and reproduces there naturally. People did not bring it. Beaver and sugar maple."],
+      ["tighten", "Climate change", "The weather changes oddly.", "A shift in the pattern over many years. One odd day is weather."]
+    ];
+
+    const app = document.querySelector("#app");
+    let page = "game";
+    let pick = null;
+    let feedback = null;
+    let banner = null;
+    let game = freshGame("brief");
+    let best = loadBest();
+    let viewKey = "";
+
+    function freshGame(phase) {
+      return { phase: phase, round: 0, seed: 1, score: 0, streak: 0, bestStreak: 0, matched: [], tries: {}, hintUsed: {}, results: [] };
+    }
+
+    function loadBest() {
+      try {
+        const saved = JSON.parse(localStorage.getItem("ranger-match-best") || "null");
+        if (saved && typeof saved.score === "number") return saved;
+      } catch (error) { /* keep the default */ }
+      return { score: 0, firstTry: 0, rank: "" };
+    }
+
+    function saveBest(next) {
+      best = next;
+      localStorage.setItem("ranger-match-best", JSON.stringify(best));
+    }
+
+    function esc(value) {
+      return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+
+    function termById(id) {
+      return TERMS.find(function (term) { return term.id === id; });
+    }
+
+    function rankFor(firstTry) {
+      if (firstTry >= 19) return { title: "Planet Protector", blurb: "You can say these. Tomorrow morning, cover the definitions and answer once. Then walk in." };
+      if (firstTry >= 15) return { title: "Biodiversity Captain", blurb: "This is a solid quiz score. The words marked “say again” are the only ones to drill tonight." };
+      if (firstTry >= 10) return { title: "Ecosystem Ranger", blurb: "The ideas are landing. Read the say-again list out loud, then play once more if you still have fuel." };
+      if (firstTry >= 5) return { title: "Habitat Scout", blurb: "Good first pass through all 21. The second game is where the sentences stick. Play again tonight." };
+      return { title: "Trail Cub", blurb: "That was a full first look. Play again while the words are fresh. The second run feels different." };
+    }
+
+    function mulberry32(seed) {
+      let a = seed >>> 0;
+      return function () {
+        a |= 0;
+        a = (a + 0x6d2b79f5) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+
+    function shuffle(items, seed) {
+      const rng = mulberry32(seed);
+      const copy = items.slice();
+      for (let i = copy.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(rng() * (i + 1));
+        const tmp = copy[i];
+        copy[i] = copy[j];
+        copy[j] = tmp;
+      }
+      return copy;
+    }
+
+    function firstTryCount() {
+      return game.results.filter(function (result) { return result.firstTry; }).length;
+    }
+
+    function callout(tone, title, body) {
+      return '<div class="callout ' + tone + '"><strong>' + esc(title) + '</strong><p>' + esc(body) + '</p></div>';
+    }
+
+    function buttons(items) {
+      return '<div class="row">' + items.map(function (item) {
+        return '<button class="btn ' + item[0] + '" data-action="' + item[1] + '">' + esc(item[2]) + '</button>';
+      }).join("") + '</div>';
+    }
+
+    function studyHtml() {
+      const blocks = MISSIONS.map(function (mission, round) {
+        const rows = TERMS.filter(function (term) { return term.round === round; }).map(function (term) {
+          return "<tr><td>" + esc(term.term) + "</td><td>" + esc(term.definition) + "</td><td>" + esc(term.example) + "</td></tr>";
+        }).join("");
+        return "<h2>" + esc(mission.title) + "</h2><table><thead><tr><th>Word</th><th>Definition</th><th>Example</th></tr></thead><tbody>" + rows + "</tbody></table>";
+      }).join("");
+      return '<div class="stack"><h1>Study sheet</h1><p class="muted">Grade 7 word study · Interactions in the Environment</p><p class="muted">The definition is the sentence to write on the quiz. Cover it, say the word, answer out loud.</p>' + blocks + buttons([["primary", "back", "Back to the game"]]) + "</div>";
+    }
+
+    function notebookHtml() {
+      const rows = FIXES.map(function (fix) {
+        return '<tr class="' + fix[0] + '"><td>' + esc(fix[1]) + '</td><td>' + esc(fix[2]) + '</td><td>' + esc(fix[3]) + '</td></tr>';
+      }).join("");
+      return '<div class="stack"><h1>Notebook check</h1><p class="muted">Open this after the game, when you mark the notebook together.</p><p>Four of these are already quiz-ready. The rest need a tighter sentence so tomorrow the science meaning is the one that gets written down.</p>' +
+        callout("success", "Keep these. They already match.", "Mutualism: both benefit. Add the bee and the flower. Parasitism: one benefits, the other is harmed. Add a tick on a dog. Protists: microscopic and they have a nucleus. Add an amoeba or algae. Species diversity: a variety of species in one area. Keep that sentence, and use a different one for biodiversity.") +
+        "<h2>Redo these first</h2><p class=\"faint\">A red edge means the current sentence would miss. A gold edge means the idea is close and needs one detail.</p><table><thead><tr><th>Word</th><th>On the sheet</th><th>Quiz version</th></tr></thead><tbody>" +
+        rows + "</tbody></table>" + buttons([["primary", "back", "Back to the game"], ["secondary", "study", "Study sheet"]]) + "</div>";
+    }
+
+    function briefHtml() {
+      const bestLine = best.score > 0 ? '<p class="strong">Best run saved: ' + best.score + " points · " + esc(best.rank) + "</p>" : "";
+      return '<div class="stack"><h1>Ranger Match</h1><p class="muted">Grade 7 word study · Interactions in the Environment. 21 words, three short missions, about ten minutes.</p>' +
+        callout("info", "How to play tonight", "Tap a word, read the meanings out loud, and tap the one that fits. On a miss, take the hint before anyone gives you the answer. At the end of each mission, read the seven lines out loud. Tomorrow morning, open the study sheet, cover the definitions, and say them.") +
+        "<h2>The three missions</h2><p>1. The big picture. Variety, homes, adaptations, climate.</p><p>2. The kingdoms. Plants, animals, fungi, protists, monera, bacteria.</p><p>3. Who interacts. Symbiosis, competition, native and invasive species.</p>" +
+        '<p class="muted">A first tap is 10 points. A retry or a hint is 5. Three correct in a row adds 5 extra until a miss. Rank comes from first taps.</p>' +
+        '<p class="faint">Ranks: Trail Cub, Habitat Scout, Ecosystem Ranger, Biodiversity Captain, Planet Protector.</p>' +
+        bestLine + buttons([["primary", "start", "Start mission 1"], ["secondary", "study", "Study sheet"], ["ghost", "notebook", "Notebook check"]]) + "</div>";
+    }
+
+    function playHtml() {
+      const mission = MISSIONS[game.round];
+      const terms = shuffle(TERMS.filter(function (term) { return term.round === game.round; }), game.seed + game.round * 100);
+      const defs = shuffle(TERMS.filter(function (term) { return term.round === game.round; }), game.seed + game.round * 100 + 9);
+      const selectedName = pick && pick.side === "term" ? termById(pick.id).term : "";
+      const prompt = !pick ? "Tap a word. Then tap the meaning that fits." : pick.side === "term" ? "Find the meaning of " + selectedName + "." : "Now tap the word that fits the meaning you picked.";
+      const words = terms.map(function (term) {
+        const done = game.matched.indexOf(term.id) !== -1;
+        const selected = pick && pick.side === "term" && pick.id === term.id;
+        return '<button class="chip' + (done ? " done" : "") + (selected ? " selected" : "") + '" data-action="term" data-id="' + term.id + '">' + esc(term.term) + "</button>";
+      }).join("");
+      const meanings = defs.map(function (term, index) {
+        const done = game.matched.indexOf(term.id) !== -1;
+        const selected = pick && pick.side === "def" && pick.id === term.id;
+        return '<button class="meaning' + (done ? " done" : "") + (selected ? " selected" : "") + '" data-action="def" data-id="' + term.id + '"><span class="letter">' + LETTERS[index] + '</span><span>' + esc(term.definition) + (done ? '<span class="match-note">Matches ' + esc(term.term) + "</span>" : "") + "</span></button>";
+      }).join("");
+      const note = feedback ? callout(feedback.tone, feedback.title, feedback.body) : callout("info", mission.title, mission.aim);
+      return '<div class="stack"><div class="row spread"><div><h1>Ranger Match</h1><p class="muted">' + esc(mission.title) + '</p></div><div class="stats"><div class="stat"><b>' + game.score + '</b><span>Points</span></div><div class="stat' + (game.streak >= 3 ? " hot" : "") + '"><b>' + game.streak + '</b><span>Streak</span></div><div class="stat"><b>' + firstTryCount() + '/21</b><span>First taps</span></div></div></div>' +
+        '<p class="faint">Matched ' + game.results.length + " of 21 · " + game.matched.length + " of 7 this mission · First tap 10, retry 5, streak of 3 adds 5</p>" +
+        note + '<div class="row"><p class="strong">' + esc(prompt) + '</p><button class="btn ghost" data-action="hint">Hint</button></div><h3>Words</h3><div class="row">' + words + '</div><h3>Jumbled meanings</h3><div class="stack">' + meanings + '</div><button class="btn ghost" data-action="start">Start over</button></div>';
+    }
+
+    function betweenHtml() {
+      const mission = MISSIONS[game.round];
+      const roundResults = game.results.filter(function (result) {
+        const term = termById(result.id);
+        return term && term.round === game.round;
+      });
+      const roundFirst = roundResults.filter(function (result) { return result.firstTry; }).length;
+      const roundPoints = roundResults.reduce(function (sum, result) { return sum + result.points; }, 0);
+      const lines = roundResults.map(function (result) {
+        const term = termById(result.id);
+        const tag = result.firstTry ? "first tap · +" + result.points : "say again · +" + result.points;
+        return '<div class="review"><p class="strong">' + esc(term.term) + ' <span class="faint">' + tag + '</span></p><p class="muted">' + esc(term.review) + "</p></div>";
+      }).join("");
+      const carry = game.streak > 0 && game.round < 2 ? '<p class="faint">The streak carries into the next mission.</p>' : "";
+      const label = game.round === 2 ? "See your rank" : "Start mission " + (game.round + 2);
+      return '<div class="stack"><h1>' + esc(mission.title) + ' cleared</h1><div class="stats"><div class="stat"><b>' + roundPoints + '</b><span>Points this mission</span></div><div class="stat hot"><b>' + roundFirst + '/7</b><span>First taps</span></div><div class="stat' + (game.streak >= 3 ? " hot" : "") + '"><b>' + game.streak + '</b><span>Streak</span></div></div>' +
+        callout("info", "Read each line out loud", "Saying it is what sticks for tomorrow. The first sentence of each line is the quiz sentence.") +
+        lines + buttons([["primary", "continue", label]]) + carry + "</div>";
+    }
+
+    function doneHtml() {
+      const count = firstTryCount();
+      const rank = rankFor(count);
+      const retries = game.results.filter(function (result) { return !result.firstTry; });
+      const retryBlock = retries.length ? "<h2>Say these again tonight</h2><table><thead><tr><th>Word</th><th>Quiz sentence</th><th>Example</th></tr></thead><tbody>" + retries.map(function (result) {
+        const term = termById(result.id);
+        return '<tr class="tighten"><td>' + esc(term.term) + "</td><td>" + esc(term.definition) + "</td><td>" + esc(term.example) + "</td></tr>";
+      }).join("") + "</tbody></table>" : callout("success", "Every word was a first tap", "Read the study sheet once in the morning anyway. Saying them beats recognizing them.");
+      const bannerLine = banner === "new" ? '<p class="strong">Saved as the best run in this browser.</p>' : banner === "kept" ? '<p class="strong">Best run stays ' + best.score + " points · " + esc(best.rank) + "</p>" : "";
+      const again = count >= 15 ? "secondary" : "primary";
+      const study = count >= 15 ? "primary" : "secondary";
+      return '<div class="stack"><p class="faint">Ranger Match · Interactions in the Environment</p><h1>' + esc(rank.title) + "</h1><p>" + esc(rank.blurb) + '</p><div class="stats"><div class="stat"><b>' + game.score + '</b><span>Points</span></div><div class="stat hot"><b>' + count + '/21</b><span>First taps</span></div><div class="stat"><b>' + game.bestStreak + '</b><span>Best streak</span></div></div>' +
+        bannerLine + retryBlock + callout("info", "Tomorrow morning, ten minutes", "Cover the definition. Say the word, then the sentence, then the example. Start with the say-again list. Finish with three you already know.") +
+        buttons([[again, "start", "Play again"], [study, "study", "Study sheet"], ["ghost", "notebook", "Notebook check"]]) + "</div>";
+    }
+
+    function render() {
+      const nextKey = page + ":" + game.phase + ":" + game.round;
+      const changed = nextKey !== viewKey;
+      if (page === "study") app.innerHTML = studyHtml();
+      else if (page === "notebook") app.innerHTML = notebookHtml();
+      else if (game.phase === "brief") app.innerHTML = briefHtml();
+      else if (game.phase === "play") app.innerHTML = playHtml();
+      else if (game.phase === "between") app.innerHTML = betweenHtml();
+      else app.innerHTML = doneHtml();
+      if (changed) window.scrollTo(0, 0);
+      else {
+        const box = document.querySelector(".callout");
+        if (box) box.scrollIntoView({ block: "nearest" });
+      }
+      viewKey = nextKey;
+    }
+
+    function start() {
+      pick = null;
+      feedback = null;
+      banner = null;
+      page = "game";
+      game = freshGame("play");
+      game.seed = Math.floor(Math.random() * 1000000000) + 1;
+      render();
+    }
+
+    function resolve(termId, defId) {
+      const term = termById(termId);
+      if (!term) return;
+      if (game.matched.indexOf(termId) !== -1 || game.matched.indexOf(defId) !== -1) return;
+      if (termId === defId) {
+        const wrongs = game.tries[termId] || 0;
+        const hinted = game.hintUsed[termId] === true;
+        const firstTry = wrongs === 0 && !hinted;
+        const nextStreak = game.streak + 1;
+        const points = (firstTry ? 10 : 5) + (nextStreak >= 3 ? 5 : 0);
+        game.score += points;
+        game.streak = nextStreak;
+        game.bestStreak = Math.max(game.bestStreak, nextStreak);
+        game.matched = game.matched.concat(termId);
+        game.results = game.results.concat({ id: termId, firstTry: firstTry, points: points });
+        if (game.matched.length === 7) game.phase = "between";
+        pick = null;
+        feedback = { tone: "success", title: (nextStreak >= 3 ? "Streak " + nextStreak + " · +" : "+") + points + " · " + term.term, body: term.review };
+        render();
+        return;
+      }
+      game.streak = 0;
+      game.tries[termId] = (game.tries[termId] || 0) + 1;
+      pick = null;
+      feedback = { tone: "warning", title: "Not yet · " + term.term, body: term.hint };
+      render();
+    }
+
+    function onTerm(id) {
+      if (game.matched.indexOf(id) !== -1) return;
+      if (pick && pick.side === "def") { resolve(id, pick.id); return; }
+      if (pick && pick.side === "term" && pick.id === id) { pick = null; render(); return; }
+      pick = { side: "term", id: id };
+      render();
+    }
+
+    function onDef(id) {
+      if (game.matched.indexOf(id) !== -1) return;
+      if (pick && pick.side === "term") { resolve(pick.id, id); return; }
+      if (pick && pick.side === "def" && pick.id === id) { pick = null; render(); return; }
+      pick = { side: "def", id: id };
+      render();
+    }
+
+    function showHint() {
+      if (!pick || pick.side !== "term") {
+        feedback = { tone: "info", title: "Pick a word first", body: "Tap a word, then take a hint. A hint makes that word worth 5 points." };
+        render();
+        return;
+      }
+      const term = termById(pick.id);
+      game.hintUsed[pick.id] = true;
+      feedback = { tone: "info", title: "Hint · " + term.term, body: term.hint };
+      render();
+    }
+
+    function continueRun() {
+      pick = null;
+      feedback = null;
+      if (game.round === 2) {
+        const count = firstTryCount();
+        const title = rankFor(count).title;
+        banner = best.score === 0 || game.score > best.score ? "new" : "kept";
+        if (game.score >= best.score) saveBest({ score: game.score, firstTry: count, rank: title });
+        game.phase = "done";
+        render();
+        return;
+      }
+      game.phase = "play";
+      game.round += 1;
+      game.matched = [];
+      render();
+    }
+
+    app.addEventListener("click", function (event) {
+      const el = event.target.closest("[data-action]");
+      if (!el) return;
+      const action = el.dataset.action;
+      if (action === "start") start();
+      else if (action === "study") { page = "study"; render(); }
+      else if (action === "notebook") { page = "notebook"; render(); }
+      else if (action === "back") { page = "game"; render(); }
+      else if (action === "term") onTerm(el.dataset.id);
+      else if (action === "def") onDef(el.dataset.id);
+      else if (action === "hint") showHint();
+      else if (action === "continue") continueRun();
+    });
+
+    render();
+  </script>
+</body>
+</html>
