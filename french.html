@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vive les Sports</title>
+  <style>
+    :root {
+      --ink: #1a2e24;
+      --muted: #4d6156;
+      --faint: #6d7f74;
+      --line: #d5ddd4;
+      --paper: #f3f1ea;
+      --card: #fffdf8;
+      --green: #1d6b43;
+      --green-soft: #e7f5ec;
+      --ok: #e5f6ea;
+      --warn: #fff4e5;
+      --info: #e8f2f6;
+      --danger: #f8e8e6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font: 17px/1.45 "Iowan Old Style", Palatino, Georgia, serif;
+    }
+    main {
+      max-width: 880px;
+      margin: 0 auto;
+      padding: 28px 20px 64px;
+    }
+    h1, h2, h3 { font-family: "Avenir Next", "Segoe UI", sans-serif; line-height: 1.2; margin: 0; }
+    h1 { font-size: 32px; }
+    h2 { font-size: 22px; margin-top: 8px; }
+    h3 { font-size: 16px; letter-spacing: 0.02em; }
+    p { margin: 0; }
+    a { color: var(--green); }
+    .stack { display: flex; flex-direction: column; gap: 14px; }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .spread { justify-content: space-between; align-items: flex-end; }
+    .muted { color: var(--muted); }
+    .faint { color: var(--faint); font-size: 14px; }
+    .strong { font-weight: 700; }
+    button, .chip {
+      font: 16px/1.3 "Avenir Next", "Segoe UI", sans-serif;
+      cursor: pointer;
+    }
+    .btn {
+      border-radius: 8px;
+      padding: 10px 14px;
+      border: 1px solid transparent;
+    }
+    .btn.primary { background: var(--green); color: white; }
+    .btn.secondary { background: var(--card); color: var(--ink); border-color: var(--line); }
+    .btn.ghost { background: transparent; color: var(--muted); border-color: transparent; padding-left: 8px; }
+    .chip, .meaning {
+      border: 1px solid var(--line);
+      background: var(--card);
+      color: var(--ink);
+      border-radius: 8px;
+    }
+    .chip { padding: 8px 12px; }
+    .chip.selected, .meaning.selected { border-color: var(--green); background: var(--green-soft); }
+    .chip.done, .meaning.done { background: #ebe8e0; color: var(--muted); cursor: default; }
+    .meaning {
+      width: 100%;
+      display: flex;
+      gap: 10px;
+      text-align: left;
+      padding: 12px;
+    }
+    .letter { width: 22px; flex: none; font-weight: 700; color: var(--green); }
+    .meaning.done .letter { color: var(--faint); }
+    .match-note { display: block; margin-top: 4px; color: var(--faint); font-size: 13px; }
+    .stats { display: flex; gap: 18px; }
+    .stat b { display: block; font-family: "Avenir Next", "Segoe UI", sans-serif; font-size: 26px; }
+    .stat span { color: var(--faint); font-size: 13px; }
+    .stat.hot b { color: var(--green); }
+    .callout { border-radius: 8px; padding: 12px 14px; }
+    .callout.success { background: var(--ok); }
+    .callout.warning { background: var(--warn); }
+    .callout.info { background: var(--info); }
+    .callout strong { display: block; margin-bottom: 4px; font-family: "Avenir Next", "Segoe UI", sans-serif; }
+    table { width: 100%; border-collapse: collapse; background: var(--card); font-size: 15px; }
+    th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+    th { font-family: "Avenir Next", "Segoe UI", sans-serif; font-size: 13px; }
+    .review + .review { padding-top: 4px; }
+    .hear { padding: 6px 8px; }
+  </style>
+</head>
+<body>
+  <main id="app"></main>
+  <script>
+    const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+    const MISSIONS = [
+      { title: "Mission 1 · Noms masculins", aim: "Eight masculine nouns. Each one starts with le or un." },
+      { title: "Mission 2 · Noms féminins", aim: "Six feminine nouns. Each one starts with la or une. Joueur and bénévole have a partner in this list." },
+      { title: "Mission 3 · Verbes du sport", aim: "Play, like, win, score, sign up, improve." },
+      { title: "Mission 4 · Verbes de base", aim: "Cost, send, go, be, have, and do." },
+      { title: "Mission 5 · Adjectifs", aim: "Happy, talented, athletic. Watch the feminine ending." },
+      { title: "Mission 6 · Mots interrogatifs", aim: "What, when, who, how, where. Où needs the accent." }
+    ];
+    const TERMS = [
+      { id: "directeur", term: "le directeur", round: 0, definition: "a manager or a director", example: "Le directeur organise le tournoi.", hint: "The person in charge. Not a player.", review: "Le directeur is a manager or a director. Say: le directeur. Le directeur organise le tournoi." },
+      { id: "cadeau", term: "un cadeau", round: 0, definition: "a present or a gift", example: "C'est un cadeau pour l'équipe.", hint: "Something you give. Not the price, and not a medal.", review: "Un cadeau is a present or a gift. Say: un cadeau. A medal is une médaille. A price is le prix." },
+      { id: "prix", term: "le prix", round: 0, definition: "the price, or an award", example: "Le premier prix est une médaille.", hint: "Two meanings. What you pay, or a prize you win. Not the gift itself.", review: "Le prix is the price, or an award. Say: le prix. Le premier prix est une médaille. The gift is un cadeau." },
+      { id: "tournoi", term: "un tournoi", round: 0, definition: "a tournament", example: "C'est un tournoi de soccer.", hint: "One event made of several games. Smaller than the whole championship.", review: "Un tournoi is a tournament. Say: un tournoi. Un championnat is the bigger championship." },
+      { id: "benevole-m", term: "un bénévole", round: 0, definition: "a volunteer (masculine)", example: "Marc est un bénévole.", hint: "Helps and is not paid. This one uses un. The spelling stays the same for une.", review: "Un bénévole is a male volunteer. Say: un bénévole. Une bénévole is the feminine one, same spelling." },
+      { id: "championnat", term: "un championnat", round: 0, definition: "a championship", example: "C'est un championnat de hockey.", hint: "The big competition for the title. Bigger than one tournament.", review: "Un championnat is a championship. Say: un championnat. Un tournoi is one tournament inside a season." },
+      { id: "succes", term: "un succès", round: 0, definition: "a success", example: "C'est un succès.", hint: "When it works. A good result. The word has an è.", review: "Un succès is a success. Say: un succès. The accent is on the e: suc-cès." },
+      { id: "joueur", term: "un joueur", round: 0, definition: "a player (masculine)", example: "Luc est un joueur.", hint: "A male player. The feminine word ends in -euse.", review: "Un joueur is a male player. Say: un joueur. Une joueuse is a female player." },
+
+      { id: "semaine", term: "une semaine", round: 1, definition: "a week", example: "C'est une longue semaine.", hint: "Seven days.", review: "Une semaine is a week. Say: une semaine." },
+      { id: "benevole-f", term: "une bénévole", round: 1, definition: "a volunteer (feminine)", example: "Sara est une bénévole.", hint: "A volunteer. This one uses une. Same spelling as the masculine noun.", review: "Une bénévole is a female volunteer. Say: une bénévole. Un bénévole is the masculine one." },
+      { id: "equipe", term: "une équipe", round: 1, definition: "a team", example: "Notre équipe gagne.", hint: "The whole group that plays together. It starts with une é.", review: "Une équipe is a team. Say: une équipe. Notre équipe gagne." },
+      { id: "medaille", term: "une médaille", round: 1, definition: "a medal", example: "Elle gagne une médaille.", hint: "Gold, silver, or bronze, on a ribbon. Not the gift, and not the price.", review: "Une médaille is a medal. Say: une médaille. Elle gagne une médaille." },
+      { id: "joueuse", term: "une joueuse", round: 1, definition: "a player (feminine)", example: "Marie est une joueuse.", hint: "A female player. It ends in -euse.", review: "Une joueuse is a female player. Say: une joueuse. Un joueur is a male player." },
+      { id: "naissance", term: "la date de naissance", round: 1, definition: "date of birth", example: "Écris ta date de naissance.", hint: "The day you were born. Three words, starting with la date.", review: "La date de naissance is a date of birth. Say: la date de naissance." },
+
+      { id: "jouer", term: "jouer à", say: "jouer à", round: 2, definition: "to play a sport", example: "J'aime jouer au soccer.", hint: "The sport verb. Keep the à. Jouer à + le becomes au: jouer au soccer.", review: "Jouer à means to play a sport. Say: jouer à. J'aime jouer au soccer. The à plus le turns into au." },
+      { id: "aimer", term: "aimer", round: 2, definition: "to like", example: "Elle aime le hockey.", hint: "To like. A short verb.", review: "Aimer means to like. Say: aimer. Elle aime le hockey." },
+      { id: "gagner", term: "gagner", round: 2, definition: "to win", example: "Ils veulent gagner.", hint: "To win. The gn sounds like the ny in canyon.", review: "Gagner means to win. Say: gagner. Gn sounds like ny. Ils veulent gagner." },
+      { id: "marquer", term: "marquer un but / un point", say: "marquer un but ou un point", round: 2, definition: "to score a goal or a point", example: "Il veut marquer un but.", hint: "What goes on the board: a goal, or a point.", review: "Marquer un but, or marquer un point, means to score. Say: marquer un but. Il veut marquer un but." },
+      { id: "inscrire", term: "s'inscrire", round: 2, definition: "to enroll", example: "Elle va s'inscrire au tournoi.", hint: "Put your name down for the team or the tournament. It starts with s'.", review: "S'inscrire means to enroll, to sign up. Say: s'inscrire. Elle va s'inscrire au tournoi." },
+      { id: "ameliorer", term: "améliorer", round: 2, definition: "to improve", example: "Je veux améliorer mon jeu.", hint: "To get better at it.", review: "Améliorer means to improve. Say: améliorer. Je veux améliorer mon jeu." },
+
+      { id: "couter", term: "coûter", round: 3, definition: "to cost", example: "Ça va coûter cinq dollars.", hint: "The verb that goes with le prix. It has a û.", review: "Coûter means to cost. Say: coûter. Ça va coûter cinq dollars." },
+      { id: "envoyer", term: "envoyer", round: 3, definition: "to send", example: "Il va envoyer un message.", hint: "To send a message or a form.", review: "Envoyer means to send. Say: envoyer. Il va envoyer un message." },
+      { id: "aller", term: "aller", round: 3, definition: "to go", example: "On veut aller au match.", hint: "To go. One of the four verbs you already use all the time.", review: "Aller means to go. Say: aller. On veut aller au match." },
+      { id: "etre", term: "être", round: 3, definition: "to be", example: "Il veut être champion.", hint: "To be. The ê has a little hat.", review: "Être means to be. Say: être. Il veut être champion." },
+      { id: "avoir", term: "avoir", round: 3, definition: "to have", example: "Elle veut avoir une médaille.", hint: "To have.", review: "Avoir means to have. Say: avoir. Elle veut avoir une médaille." },
+      { id: "faire", term: "faire", round: 3, definition: "to do or to make", example: "On va faire un tournoi.", hint: "To do, or to make. Both English words are this one verb.", review: "Faire means to do or to make. Say: faire. On va faire un tournoi." },
+
+      { id: "content", term: "content / contente", say: "content, contente", round: 4, definition: "happy", example: "Il est content. Elle est contente.", hint: "Happy. Add an e when the person or the noun is feminine.", review: "Content means happy. A girl or a feminine noun is contente, with an e. Say: content, contente." },
+      { id: "talentueux", term: "talentueux / talentueuse", say: "talentueux, talentueuse", round: 4, definition: "talented (the long word)", example: "Il est talentueux. Elle est talentueuse.", hint: "Talented. This is the long one. Feminine ends in -euse.", review: "Talentueux means talented. Feminine: talentueuse. Doué is the short word for the same idea. Say: talentueux, talentueuse." },
+      { id: "doue", term: "doué / douée", say: "doué, douée", round: 4, definition: "talented (the short word)", example: "Il est doué. Elle est douée.", hint: "Also talented. This is the short one. Feminine adds an e: douée.", review: "Doué means talented, the short word. Feminine: douée. Talentueux is the long word. Say: doué, douée." },
+      { id: "sportif", term: "sportif / sportive", say: "sportif, sportive", round: 4, definition: "athletic", example: "Il est sportif. Elle est sportive.", hint: "Athletic. Feminine changes -f to -ve.", review: "Sportif means athletic. Feminine: sportive. Say: sportif, sportive." },
+
+      { id: "quoi", term: "quoi", round: 5, definition: "what", example: "Tu joues à quoi?", hint: "What. Tu joues à quoi?", review: "Quoi means what. Say: quoi. Tu joues à quoi?" },
+      { id: "quand", term: "quand", round: 5, definition: "when", example: "C'est quand, le tournoi?", hint: "When. It starts with qu.", review: "Quand means when. Say: quand. C'est quand, le tournoi?" },
+      { id: "qui", term: "qui", round: 5, definition: "who", example: "Qui est le directeur?", hint: "Who. No accent on this one.", review: "Qui means who. Say: qui. Qui est le directeur?" },
+      { id: "comment", term: "comment", round: 5, definition: "how", example: "Comment jouer?", hint: "How.", review: "Comment means how. Say: comment. Comment jouer?" },
+      { id: "ou", term: "où", round: 5, definition: "where", example: "Où est l'équipe?", hint: "Where. The accent is required. Without it, ou means or.", review: "Où means where. The accent makes it where. Ou with no accent means or. Say: où. Où est l'équipe?" }
+    ];
+
+    const app = document.querySelector("#app");
+    let page = "game";
+    let pick = null;
+    let feedback = null;
+    let banner = null;
+    let game = freshGame("brief");
+    let best = loadBest();
+    let viewKey = "";
+
+    function freshGame(phase) {
+      return { phase: phase, round: 0, seed: 1, score: 0, streak: 0, bestStreak: 0, matched: [], tries: {}, hintUsed: {}, results: [] };
+    }
+
+    function loadBest() {
+      try {
+        const saved = JSON.parse(localStorage.getItem("vive-les-sports-best") || "null");
+        if (saved && typeof saved.score === "number") return saved;
+      } catch (error) { /* keep the default */ }
+      return { score: 0, firstTry: 0, rank: "" };
+    }
+
+    function saveBest(next) {
+      best = next;
+      localStorage.setItem("vive-les-sports-best", JSON.stringify(best));
+    }
+
+    function esc(value) {
+      return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+
+    function termById(id) {
+      return TERMS.find(function (term) { return term.id === id; });
+    }
+
+    function termsInRound(round) {
+      return TERMS.filter(function (term) { return term.round === round; });
+    }
+
+    function rankFor(firstTry) {
+      const total = TERMS.length;
+      if (firstTry >= total - 3) return { title: "Capitaine", blurb: "You can say these. Tomorrow, cover the English and say the French once." };
+      if (firstTry >= Math.round(total * 0.75)) return { title: "Champion", blurb: "Solid. The say-again list is the only drill. Say the French out loud, then the English." };
+      if (firstTry >= Math.round(total * 0.5)) return { title: "Joueur", blurb: "The words are landing. Read the say-again list out loud, then play the weak mission once more." };
+      if (firstTry >= Math.round(total * 0.25)) return { title: "Bénévole", blurb: "Good first pass. The second game is where the articles and the endings stick." };
+      return { title: "Recrue", blurb: "That was a full first look. Play the nouns again while they are fresh." };
+    }
+
+    function mulberry32(seed) {
+      let a = seed >>> 0;
+      return function () {
+        a |= 0;
+        a = (a + 0x6d2b79f5) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+
+    function shuffle(items, seed) {
+      const rng = mulberry32(seed);
+      const copy = items.slice();
+      for (let i = copy.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(rng() * (i + 1));
+        const tmp = copy[i];
+        copy[i] = copy[j];
+        copy[j] = tmp;
+      }
+      return copy;
+    }
+
+    function firstTryCount() {
+      return game.results.filter(function (result) { return result.firstTry; }).length;
+    }
+
+    function frenchVoice() {
+      if (!window.speechSynthesis) return null;
+      const voices = window.speechSynthesis.getVoices();
+      return voices.find(function (voice) { return voice.lang.toLowerCase() === "fr-ca"; })
+        || voices.find(function (voice) { return voice.lang.toLowerCase().indexOf("fr") === 0; })
+        || null;
+    }
+
+    function speak(text) {
+      if (!window.speechSynthesis) return false;
+      const voice = frenchVoice();
+      if (!voice) return false;
+      window.speechSynthesis.cancel();
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.voice = voice;
+      utter.lang = "fr-CA";
+      utter.rate = 0.88;
+      window.speechSynthesis.speak(utter);
+      return true;
+    }
+
+    function callout(tone, title, body) {
+      return '<div class="callout ' + tone + '"><strong>' + esc(title) + '</strong><p>' + esc(body) + '</p></div>';
+    }
+
+    function buttons(items) {
+      return '<div class="row">' + items.map(function (item) {
+        return '<button class="btn ' + item[0] + '" data-action="' + item[1] + '">' + esc(item[2]) + '</button>';
+      }).join("") + '</div>';
+    }
+
+    function studyHtml() {
+      const blocks = MISSIONS.map(function (mission, round) {
+        const rows = termsInRound(round).map(function (term) {
+          const say = term.say || term.term;
+          return '<tr><td lang="fr">' + esc(term.term) + '<br><button class="btn ghost hear" data-action="hear" data-say="' + esc(say) + '">Hear it</button></td><td>' + esc(term.definition) + '</td><td lang="fr">' + esc(term.example) + "</td></tr>";
+        }).join("");
+        return "<h2>" + esc(mission.title) + "</h2><table><thead><tr><th>Français</th><th>English</th><th>Example</th></tr></thead><tbody>" + rows + "</tbody></table>";
+      }).join("");
+      const sound = feedback ? callout(feedback.tone, feedback.title, feedback.body) : "";
+      return '<div class="stack"><h1>Study sheet</h1><p class="muted">Unité 1 · Vive les Sports</p>' + sound +
+        callout("info", "Sounds", "A verb that ends in -er sounds like ay: jouer, aimer, gagner. Gn in gagner sounds like the ny in canyon. Où means where. Ou with no accent means or. Feminine endings: content becomes contente, doué becomes douée, sportif becomes sportive, talentueux becomes talentueuse.") +
+        blocks + buttons([["primary", "back", "Back to the game"]]) + '<p class="faint"><a href="index.html">Science game: Ranger Match</a></p></div>';
+    }
+
+    function briefHtml() {
+      const bestLine = best.score > 0 ? '<p class="strong">Best run saved: ' + best.score + " points · " + esc(best.rank) + "</p>" : "";
+      return '<div class="stack"><h1>Vive les Sports</h1><p class="muted">Unité 1 · Grade 7 French. 35 words, six short missions. Stop after any mission.</p>' +
+        callout("info", "How to play", "Tap a French word, tap Hear it, and say it yourself. Then tap the English. On a miss, use the hint before anyone tells you. At the end of a mission, read each line out loud. The nouns in missions 1 and 2 are enough for one sitting.") +
+        "<h2>The six missions</h2><p>1. Masculine nouns. Le and un.</p><p>2. Feminine nouns. La and une.</p><p>3. Sport verbs. Play, like, win, score, sign up, improve.</p><p>4. Everyday verbs. Cost, send, go, be, have, do.</p><p>5. Adjectives. Watch the feminine ending.</p><p>6. Question words. Où needs the accent.</p>" +
+        '<p class="muted">A first tap is 10 points. A retry or a hint is 5. Three correct in a row adds 5 extra until a miss. Rank comes from first taps.</p>' +
+        '<p class="faint">Ranks: Recrue, Bénévole, Joueur, Champion, Capitaine.</p>' +
+        '<p class="faint"><a href="index.html">Science game: Ranger Match</a></p>' +
+        bestLine + buttons([["primary", "start", "Start mission 1"], ["secondary", "study", "Study sheet"]]) + "</div>";
+    }
+
+    function playHtml() {
+      const mission = MISSIONS[game.round];
+      const roundTerms = termsInRound(game.round);
+      const terms = shuffle(roundTerms, game.seed + game.round * 100);
+      const defs = shuffle(roundTerms, game.seed + game.round * 100 + 9);
+      const selected = pick && pick.side === "term" ? termById(pick.id) : null;
+      const prompt = !pick ? "Tap a French word. Hear it, say it, then tap the English." : pick.side === "term" ? "Find the English for " + selected.term + "." : "Now tap the French word that fits the English you picked.";
+      const words = terms.map(function (term) {
+        const done = game.matched.indexOf(term.id) !== -1;
+        const on = pick && pick.side === "term" && pick.id === term.id;
+        return '<button class="chip' + (done ? " done" : "") + (on ? " selected" : "") + '" data-action="term" data-id="' + term.id + '" lang="fr">' + esc(term.term) + "</button>";
+      }).join("");
+      const meanings = defs.map(function (term, index) {
+        const done = game.matched.indexOf(term.id) !== -1;
+        const on = pick && pick.side === "def" && pick.id === term.id;
+        return '<button class="meaning' + (done ? " done" : "") + (on ? " selected" : "") + '" data-action="def" data-id="' + term.id + '"><span class="letter">' + LETTERS[index] + '</span><span>' + esc(term.definition) + (done ? '<span class="match-note">Matches ' + esc(term.term) + "</span>" : "") + "</span></button>";
+      }).join("");
+      const note = feedback ? callout(feedback.tone, feedback.title, feedback.body) : callout("info", mission.title, mission.aim);
+      return '<div class="stack"><div class="row spread"><div><h1>Vive les Sports</h1><p class="muted">' + esc(mission.title) + '</p></div><div class="stats"><div class="stat"><b>' + game.score + '</b><span>Points</span></div><div class="stat' + (game.streak >= 3 ? " hot" : "") + '"><b>' + game.streak + '</b><span>Streak</span></div><div class="stat"><b>' + firstTryCount() + "/" + TERMS.length + '</b><span>First taps</span></div></div></div>' +
+        '<p class="faint">Matched ' + game.results.length + " of " + TERMS.length + " · " + game.matched.length + " of " + roundTerms.length + " this mission · First tap 10, retry 5, streak of 3 adds 5</p>" +
+        note + '<div class="row"><p class="strong">' + esc(prompt) + '</p><button class="btn ghost" data-action="hear">Hear it</button><button class="btn ghost" data-action="hint">Hint</button></div><h3>Français</h3><div class="row">' + words + '</div><h3>English</h3><div class="stack">' + meanings + "</div>" + buttons([["ghost", "start", "Start over"], ["ghost", "study", "Study sheet"]]) + "</div>";
+    }
+
+    function betweenHtml() {
+      const mission = MISSIONS[game.round];
+      const roundResults = game.results.filter(function (result) {
+        const term = termById(result.id);
+        return term && term.round === game.round;
+      });
+      const roundFirst = roundResults.filter(function (result) { return result.firstTry; }).length;
+      const roundPoints = roundResults.reduce(function (sum, result) { return sum + result.points; }, 0);
+      const lines = roundResults.map(function (result) {
+        const term = termById(result.id);
+        const tag = result.firstTry ? "first tap · +" + result.points : "say again · +" + result.points;
+        return '<div class="review"><p class="strong" lang="fr">' + esc(term.term) + ' <span class="faint">' + tag + '</span></p><p class="muted">' + esc(term.review) + "</p></div>";
+      }).join("");
+      const last = game.round === MISSIONS.length - 1;
+      const carry = game.streak > 0 && !last ? '<p class="faint">The streak carries into the next mission.</p>' : "";
+      const label = last ? "See your rank" : "Start mission " + (game.round + 2);
+      const pause = game.round === 1 ? callout("info", "A good place to stop", "Missions 1 and 2 are the nouns. Save the verbs for another sitting if you have had enough.") : "";
+      return '<div class="stack"><h1>' + esc(mission.title) + ' cleared</h1><div class="stats"><div class="stat"><b>' + roundPoints + '</b><span>Points this mission</span></div><div class="stat hot"><b>' + roundFirst + "/" + roundResults.length + '</b><span>First taps</span></div><div class="stat' + (game.streak >= 3 ? " hot" : "") + '"><b>' + game.streak + '</b><span>Streak</span></div></div>' +
+        callout("info", "Read each line out loud", "Say the French first, then the English. Hearing it and saying it is the whole point.") +
+        lines + pause + buttons([["primary", "continue", label], ["secondary", "study", "Study sheet"]]) + carry + "</div>";
+    }
+
+    function doneHtml() {
+      const count = firstTryCount();
+      const rank = rankFor(count);
+      const retries = game.results.filter(function (result) { return !result.firstTry; });
+      const retryBlock = retries.length ? "<h2>Say these again</h2><table><thead><tr><th>Français</th><th>English</th><th>Example</th></tr></thead><tbody>" + retries.map(function (result) {
+        const term = termById(result.id);
+        return '<tr><td lang="fr">' + esc(term.term) + "</td><td>" + esc(term.definition) + '</td><td lang="fr">' + esc(term.example) + "</td></tr>";
+      }).join("") + "</tbody></table>" : callout("success", "Every word was a first tap", "Tomorrow, cover the English and say the French anyway.");
+      const bannerLine = banner === "new" ? '<p class="strong">Saved as the best run in this browser.</p>' : banner === "kept" ? '<p class="strong">Best run stays ' + best.score + " points · " + esc(best.rank) + "</p>" : "";
+      const again = count >= Math.round(TERMS.length * 0.75) ? "secondary" : "primary";
+      const study = count >= Math.round(TERMS.length * 0.75) ? "primary" : "secondary";
+      return '<div class="stack"><p class="faint">Vive les Sports · Unité 1</p><h1>' + esc(rank.title) + "</h1><p>" + esc(rank.blurb) + '</p><div class="stats"><div class="stat"><b>' + game.score + '</b><span>Points</span></div><div class="stat hot"><b>' + count + "/" + TERMS.length + '</b><span>First taps</span></div><div class="stat"><b>' + game.bestStreak + '</b><span>Best streak</span></div></div>' +
+        bannerLine + retryBlock + buttons([[again, "start", "Play again"], [study, "study", "Study sheet"]]) + '<p class="faint"><a href="index.html">Science game: Ranger Match</a></p></div>';
+    }
+
+    function render() {
+      const nextKey = page + ":" + game.phase + ":" + game.round;
+      const changed = nextKey !== viewKey;
+      if (page === "study") app.innerHTML = studyHtml();
+      else if (game.phase === "brief") app.innerHTML = briefHtml();
+      else if (game.phase === "play") app.innerHTML = playHtml();
+      else if (game.phase === "between") app.innerHTML = betweenHtml();
+      else app.innerHTML = doneHtml();
+      if (changed) window.scrollTo(0, 0);
+      else {
+        const box = document.querySelector(".callout");
+        if (box) box.scrollIntoView({ block: "nearest" });
+      }
+      viewKey = nextKey;
+    }
+
+    function start() {
+      pick = null;
+      feedback = null;
+      banner = null;
+      page = "game";
+      game = freshGame("play");
+      game.seed = Math.floor(Math.random() * 1000000000) + 1;
+      render();
+    }
+
+    function resolve(termId, defId) {
+      const term = termById(termId);
+      if (!term || term.round !== game.round) return;
+      if (game.matched.indexOf(termId) !== -1 || game.matched.indexOf(defId) !== -1) return;
+      if (termId === defId) {
+        const wrongs = game.tries[termId] || 0;
+        const hinted = game.hintUsed[termId] === true;
+        const firstTry = wrongs === 0 && !hinted;
+        const nextStreak = game.streak + 1;
+        const points = (firstTry ? 10 : 5) + (nextStreak >= 3 ? 5 : 0);
+        game.score += points;
+        game.streak = nextStreak;
+        game.bestStreak = Math.max(game.bestStreak, nextStreak);
+        game.matched = game.matched.concat(termId);
+        game.results = game.results.concat({ id: termId, firstTry: firstTry, points: points });
+        if (game.matched.length === termsInRound(game.round).length) game.phase = "between";
+        pick = null;
+        feedback = { tone: "success", title: (nextStreak >= 3 ? "Streak " + nextStreak + " · +" : "+") + points + " · " + term.term, body: term.review };
+        speak(term.say || term.term);
+        render();
+        return;
+      }
+      game.streak = 0;
+      game.tries[termId] = (game.tries[termId] || 0) + 1;
+      pick = null;
+      feedback = { tone: "warning", title: "Not yet · " + term.term, body: term.hint };
+      render();
+    }
+
+    function onTerm(id) {
+      if (game.matched.indexOf(id) !== -1) return;
+      if (pick && pick.side === "def") { resolve(id, pick.id); return; }
+      if (pick && pick.side === "term" && pick.id === id) { pick = null; render(); return; }
+      pick = { side: "term", id: id };
+      render();
+    }
+
+    function onDef(id) {
+      if (game.matched.indexOf(id) !== -1) return;
+      if (pick && pick.side === "term") { resolve(pick.id, id); return; }
+      if (pick && pick.side === "def" && pick.id === id) { pick = null; render(); return; }
+      pick = { side: "def", id: id };
+      render();
+    }
+
+    function showHint() {
+      if (!pick || pick.side !== "term") {
+        feedback = { tone: "info", title: "Pick a French word first", body: "Tap a word, then take a hint. A hint makes that word worth 5 points." };
+        render();
+        return;
+      }
+      const term = termById(pick.id);
+      game.hintUsed[pick.id] = true;
+      feedback = { tone: "info", title: "Hint · " + term.term, body: term.hint };
+      render();
+    }
+
+    function hearSelection() {
+      if (page === "game" && game.phase === "play") {
+        if (!pick || pick.side !== "term") {
+          feedback = { tone: "info", title: "Tap a French word first", body: "Hear it speaks the word you tapped. Then you say it, and tap the English." };
+          render();
+          return;
+        }
+        const term = termById(pick.id);
+        if (!speak(term.say || term.term)) {
+          feedback = { tone: "info", title: "Read it out loud", body: "This browser has no Canadian French voice. Say the word yourself, then tap the English." };
+          render();
+        }
+        return;
+      }
+      feedback = { tone: "info", title: "Open a mission first", body: "Hear it works on a French word during a mission, and on each row of the study sheet." };
+      render();
+    }
+
+    function continueRun() {
+      pick = null;
+      feedback = null;
+      if (game.round === MISSIONS.length - 1) {
+        const count = firstTryCount();
+        const title = rankFor(count).title;
+        banner = best.score === 0 || game.score > best.score ? "new" : "kept";
+        if (game.score >= best.score) saveBest({ score: game.score, firstTry: count, rank: title });
+        game.phase = "done";
+        render();
+        return;
+      }
+      game.phase = "play";
+      game.round += 1;
+      game.matched = [];
+      render();
+    }
+
+    app.addEventListener("click", function (event) {
+      const el = event.target.closest("[data-action]");
+      if (!el) return;
+      const action = el.dataset.action;
+      if (action === "start") start();
+      else if (action === "study") { page = "study"; feedback = null; render(); }
+      else if (action === "back") { page = "game"; render(); }
+      else if (action === "term") onTerm(el.dataset.id);
+      else if (action === "def") onDef(el.dataset.id);
+      else if (action === "hint") showHint();
+      else if (action === "hear") {
+        if (el.dataset.say) {
+          if (!speak(el.dataset.say)) {
+            feedback = { tone: "info", title: "Read it out loud", body: "This browser has no Canadian French voice. Say the word yourself." };
+            render();
+          }
+          return;
+        }
+        hearSelection();
+      }
+      else if (action === "continue") continueRun();
+    });
+
+    if (window.speechSynthesis) window.speechSynthesis.getVoices();
+    render();
+  </script>
+</body>
+</html>
