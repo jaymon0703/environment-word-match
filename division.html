@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Long Division</title>
+  <style>
+    :root {
+      --ink: #1a2e24;
+      --muted: #4d6156;
+      --faint: #6d7f74;
+      --line: #d5ddd4;
+      --paper: #f3f1ea;
+      --card: #fffdf8;
+      --green: #1d6b43;
+      --green-soft: #e7f5ec;
+      --ok: #e5f6ea;
+      --warn: #fff4e5;
+      --info: #e8f2f6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font: 17px/1.45 "Iowan Old Style", Palatino, Georgia, serif;
+    }
+    main { max-width: 880px; margin: 0 auto; padding: 28px 20px 64px; }
+    h1, h2, h3 { font-family: "Avenir Next", "Segoe UI", sans-serif; line-height: 1.2; margin: 0; }
+    h1 { font-size: 32px; }
+    h2 { font-size: 22px; margin-top: 8px; }
+    h3 { font-size: 16px; letter-spacing: 0.02em; }
+    p { margin: 0; }
+    a { color: var(--green); }
+    .stack { display: flex; flex-direction: column; gap: 14px; }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .spread { justify-content: space-between; align-items: flex-end; }
+    .muted { color: var(--muted); }
+    .faint { color: var(--faint); font-size: 14px; }
+    .strong { font-weight: 700; }
+    button, .tile, .pill {
+      font: 16px/1.3 "Avenir Next", "Segoe UI", sans-serif;
+      cursor: pointer;
+    }
+    .btn { border-radius: 8px; padding: 10px 14px; border: 1px solid transparent; }
+    .btn.primary { background: var(--green); color: white; }
+    .btn.secondary { background: var(--card); color: var(--ink); border-color: var(--line); }
+    .btn.ghost { background: transparent; color: var(--muted); border-color: transparent; padding-left: 8px; }
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 99px;
+      padding: 4px 10px;
+      color: var(--muted);
+      background: transparent;
+      cursor: default;
+    }
+    .pill.on { background: var(--green); color: white; border-color: var(--green); }
+    .stats { display: flex; gap: 18px; }
+    .stat b { display: block; font-family: "Avenir Next", "Segoe UI", sans-serif; font-size: 26px; }
+    .stat span { color: var(--faint); font-size: 13px; }
+    .stat.bad b { color: #a33b32; }
+    .callout { border-radius: 8px; padding: 12px 14px; }
+    .callout.success { background: var(--ok); }
+    .callout.warning { background: var(--warn); }
+    .callout.info { background: var(--info); }
+    .callout strong { display: block; margin-bottom: 4px; font-family: "Avenir Next", "Segoe UI", sans-serif; }
+    .board-wrap { overflow-x: auto; padding: 4px 0 8px; }
+    .board {
+      display: grid;
+      grid-template-columns: 52px 18px repeat(var(--cols), 54px);
+      grid-auto-rows: 52px;
+      column-gap: 0;
+      row-gap: 6px;
+      width: max-content;
+      margin: 0 auto;
+      font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+      font-size: 22px;
+      user-select: none;
+    }
+    .cell {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 0;
+      height: 52px;
+    }
+    .given { font-weight: 700; }
+    .given.wait { opacity: 0.28; }
+    .vinculum { border-top: 3px solid var(--ink); }
+    .bracket {
+      border-top: 3px solid var(--ink);
+      border-right: 3px solid var(--ink);
+      border-radius: 0 0 16px 0;
+      height: 100%;
+      align-self: stretch;
+    }
+    .slot {
+      width: calc(100% - 6px);
+      height: 100%;
+      margin: 0 auto;
+      border: 2px dashed #c5d0c8;
+      border-radius: 8px;
+      background: #fff;
+      color: var(--ink);
+    }
+    .slot.on {
+      border-style: solid;
+      border-color: var(--green);
+      background: var(--green-soft);
+      box-shadow: 0 0 0 4px rgba(29, 107, 67, 0.14);
+    }
+    .slot.done { border-color: transparent; background: transparent; font-weight: 700; }
+    .slot.shake { animation: shake 0.35s ease; }
+    .bar { position: relative; }
+    .bar::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 3px;
+      background: var(--ink);
+    }
+    .tile {
+      font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+      font-size: 20px;
+      min-width: 48px;
+      min-height: 48px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: var(--card);
+      color: var(--ink);
+      cursor: grab;
+      touch-action: none;
+    }
+    .tile.lifting { opacity: 0.35; }
+    .tile.ghost {
+      position: fixed;
+      z-index: 20;
+      pointer-events: none;
+      box-shadow: 0 8px 18px rgba(26, 46, 36, 0.18);
+      transform: scale(1.04);
+      cursor: grabbing;
+    }
+    .bank {
+      position: sticky;
+      bottom: 0;
+      z-index: 5;
+      background: var(--paper);
+      border-top: 1px solid var(--line);
+      padding: 10px 0 6px;
+    }
+    @keyframes shake {
+      25% { transform: translateX(-5px); }
+      75% { transform: translateX(5px); }
+    }
+  </style>
+</head>
+<body>
+  <main id="app"></main>
+  <script>
+    const PHASES = ["Divide", "Multiply", "Subtract", "Bring down"];
+    const SET = [
+      { dividend: 936, divisor: 4, note: "This is the problem from the video. One digit at a time, left to right." },
+      { dividend: 72, divisor: 3, note: "Two steps. Same four moves." },
+      { dividend: 756, divisor: 6, note: "Three digits, all the way across." },
+      { dividend: 945, divisor: 5, note: "Keep each digit in its column." },
+      { dividend: 364, divisor: 4, note: "4 does not fit into 3. Start with 36, and write the first answer digit above the 6." },
+      { dividend: 1248, divisor: 3, note: "Four digits. 3 does not fit into 1, so start with 12." },
+      { dividend: 2156, divisor: 4, note: "Four digits again." },
+      { dividend: 3672, divisor: 8, note: "8 into 36, then keep going." },
+      { dividend: 850, divisor: 6, note: "This one does not come out even. What is left at the end is the remainder." }
+    ];
+    const LONG_ONE = { dividend: 315270, divisor: 5, note: "The long one from the video. 5 does not fit into 3, and one of the answer digits is 0." };
+
+    // @engine
+    function buildProblem(spec) {
+      const dividend = spec.dividend;
+      const divisor = spec.divisor;
+      const digits = String(dividend).split("").map(Number);
+      const steps = [];
+      let end = -1;
+      let value = 0;
+      while (end + 1 < digits.length && value < divisor) {
+        end += 1;
+        value = value * 10 + digits[end];
+      }
+      let row = 2;
+      let workRow = 1;
+      let first = true;
+
+      while (end < digits.length) {
+        const q = Math.floor(value / divisor);
+        const product = q * divisor;
+        const remainder = value - product;
+        const current = value;
+        const at = end;
+        const skipped = first && at > 0;
+        const zeroHold = q === 0 && end + 1 < digits.length;
+        const tooBig = (q + 1) * divisor;
+        let prompt = "How many " + divisor + "s make " + current + ", or almost " + current + "? Write that digit above the " + digits[at] + ".";
+        if (skipped) {
+          prompt = divisor + " does not fit into " + digits[0] + ". Use " + current + " instead. How many " + divisor + "s make " + current + "? Write that digit above the " + digits[at] + ".";
+        }
+        if (zeroHold) {
+          prompt = divisor + " does not fit into " + current + ". Write 0 above the " + digits[at] + ". Do not multiply by 0. The next move brings down another digit.";
+        }
+        steps.push({
+          kind: "divide",
+          phase: "Divide",
+          value: q,
+          row: 0,
+          col: at,
+          span: 1,
+          prompt: prompt,
+          reveal: "It is " + q + ". " + q + " × " + divisor + " = " + product + ". " + (q + 1) + " × " + divisor + " = " + tooBig + " is too big."
+        });
+        first = false;
+
+        if (zeroHold) {
+          end += 1;
+          const brought = digits[end];
+          const next = current * 10 + brought;
+          steps.push({
+            kind: "bring",
+            phase: "Bring down",
+            value: brought,
+            row: workRow,
+            col: end,
+            span: 1,
+            prompt: "Bring down a copy of the " + brought + ". " + current + " becomes " + next + ".",
+            reveal: "Bring down " + brought + "."
+          });
+          value = next;
+          continue;
+        }
+
+        const productWidth = String(product).length;
+        const currentWidth = String(current).length;
+        steps.push({
+          kind: "multiply",
+          phase: "Multiply",
+          value: product,
+          row: row,
+          col: at - productWidth + 1,
+          span: productWidth,
+          barFrom: at - currentWidth + 1,
+          barTo: at,
+          prompt: "Multiply. " + q + " × " + divisor + ". Write that number under " + current + ".",
+          reveal: q + " × " + divisor + " = " + product + "."
+        });
+        row += 1;
+        const last = end + 1 >= digits.length;
+        steps.push({
+          kind: "subtract",
+          phase: "Subtract",
+          value: remainder,
+          row: row,
+          col: at,
+          span: 1,
+          prompt: last
+            ? "Subtract. " + current + " − " + product + ". No digits are left to bring down. What is left is the remainder."
+            : "Subtract. " + current + " − " + product + ". Write what is left.",
+          reveal: current + " − " + product + " = " + remainder + "."
+        });
+        if (last) break;
+        end += 1;
+        const brought = digits[end];
+        const next = remainder * 10 + brought;
+        steps.push({
+          kind: "bring",
+          phase: "Bring down",
+          value: brought,
+          row: row,
+          col: end,
+          span: 1,
+          prompt: "Bring down a copy of the next digit, the " + brought + ". " + remainder + " teams up with it to make " + next + ".",
+          reveal: "Bring down " + brought + "."
+        });
+        workRow = row;
+        value = next;
+        row += 1;
+      }
+
+      const quotient = Math.floor(dividend / divisor);
+      const remainder = dividend % divisor;
+      const written = steps.filter(function (s) { return s.kind === "divide"; }).map(function (s) { return s.value; }).join("");
+      if (Number(written) !== quotient) throw new Error("Bad quotient for " + dividend + " / " + divisor);
+      const lastSubtract = steps.filter(function (s) { return s.kind === "subtract"; }).pop();
+      if (!lastSubtract || lastSubtract.value !== remainder) throw new Error("Bad remainder for " + dividend + " / " + divisor);
+
+      return {
+        dividend: dividend,
+        divisor: divisor,
+        note: spec.note,
+        digits: digits,
+        steps: steps,
+        quotient: quotient,
+        remainder: remainder
+      };
+    }
+    // @engine-end
+
+    const app = document.querySelector("#app");
+    let page = "brief";
+    let queue = SET.slice();
+    let index = 0;
+    let problem = null;
+    let step = 0;
+    let tiles = [];
+    let used = {};
+    let score = 0;
+    let penalties = 0;
+    let misses = 0;
+    let flash = null;
+    let banner = "";
+    let best = loadBest();
+    let viewKey = "";
+    let drag = null;
+
+    function loadBest() {
+      try {
+        const saved = JSON.parse(localStorage.getItem("division-best") || "null");
+        if (saved && typeof saved.score === "number") return saved;
+      } catch (error) { /* keep the default */ }
+      return { score: 0, penalties: 0 };
+    }
+
+    function saveBest(next) {
+      best = next;
+      localStorage.setItem("division-best", JSON.stringify(best));
+    }
+
+    function maybeSave() {
+      if (score > best.score) {
+        saveBest({ score: score, penalties: penalties });
+        banner = "new";
+      } else if (best.score > 0) banner = "kept";
+      else banner = "";
+    }
+
+    function esc(value) {
+      return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+
+    function commas(n) {
+      return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    }
+
+    function mulberry32(seed) {
+      let a = seed >>> 0;
+      return function () {
+        a |= 0;
+        a = (a + 0x6d2b79f5) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+
+    function shuffle(items, seed) {
+      const rng = mulberry32(seed);
+      const copy = items.slice();
+      for (let i = copy.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(rng() * (i + 1));
+        const tmp = copy[i];
+        copy[i] = copy[j];
+        copy[j] = tmp;
+      }
+      return copy;
+    }
+
+    function makeTiles(built, seed) {
+      const bag = built.steps.map(function (s, i) {
+        return { id: "n" + i, value: s.value };
+      });
+      const needed = {};
+      built.steps.forEach(function (s) { needed[s.value] = true; });
+      const extras = [];
+      function add(n) {
+        if (!Number.isInteger(n) || n < 0 || n > 99) return;
+        if (needed[n]) return;
+        if (extras.indexOf(n) !== -1) return;
+        extras.push(n);
+      }
+      built.steps.forEach(function (s) {
+        if (s.kind === "divide" && s.value < 9) add(s.value + 1);
+        if (s.kind === "multiply") add(s.value + built.divisor);
+        if (s.kind === "subtract") add(s.value + 1);
+      });
+      for (let n = 0; n <= 9 && extras.length < 4; n += 1) add(n);
+      extras.slice(0, 4).forEach(function (n, i) { bag.push({ id: "x" + i, value: n }); });
+      return shuffle(bag, seed);
+    }
+
+    function callout(tone, title, body) {
+      return '<div class="callout ' + tone + '"><strong>' + esc(title) + '</strong>' + (body ? '<p>' + esc(body) + '</p>' : '') + '</div>';
+    }
+
+    function buttons(items) {
+      return '<div class="row">' + items.map(function (item) {
+        return '<button class="btn ' + item[0] + '" data-action="' + item[1] + '">' + esc(item[2]) + '</button>';
+      }).join("") + '</div>';
+    }
+
+    function equation(p) {
+      const total = p.quotient * p.divisor + p.remainder;
+      if (p.remainder) return p.quotient + " × " + p.divisor + " + " + p.remainder + " = " + total;
+      return p.quotient + " × " + p.divisor + " = " + total;
+    }
+
+    function resultLine(p) {
+      const answer = commas(p.dividend) + " ÷ " + p.divisor + " = " + commas(p.quotient) + (p.remainder ? " remainder " + p.remainder : "");
+      return answer + ". Check: " + equation(p) + ".";
+    }
+
+    function litDigit(col) {
+      const first = problem.steps[0].col;
+      if (col <= first) return true;
+      return problem.steps.some(function (s, i) {
+        return s.kind === "bring" && s.col === col && i <= step;
+      });
+    }
+
+    function boardHtml() {
+      const n = problem.digits.length;
+      const occupied = {};
+      problem.steps.forEach(function (s) {
+        for (let i = 0; i < s.span; i += 1) occupied[s.row + ":" + (s.col + i)] = true;
+      });
+      const pieces = [];
+      pieces.push('<div class="cell given" style="grid-row:2;grid-column:1">' + problem.divisor + '</div>');
+      pieces.push('<div class="cell bracket" style="grid-row:2;grid-column:2"></div>');
+      problem.digits.forEach(function (digit, col) {
+        const wait = litDigit(col) ? "" : " wait";
+        pieces.push('<div class="cell given vinculum' + wait + '" style="grid-row:2;grid-column:' + (3 + col) + '">' + digit + '</div>');
+      });
+      problem.steps.forEach(function (s, i) {
+        let cls = "cell slot";
+        if (i < step) cls += " done";
+        else if (i === step) cls += " on";
+        if (s.kind === "multiply") cls += " bar";
+        if (flash && flash.tone === "warning" && i === step) cls += " shake";
+        const state = i < step ? "done" : i === step ? "active" : "later";
+        const text = i < step ? esc(s.value) : "";
+        pieces.push('<div class="' + cls + '" data-slot="' + state + '" style="grid-row:' + (s.row + 1) + ';grid-column:' + (3 + s.col) + ' / span ' + s.span + '">' + text + '</div>');
+      });
+      problem.steps.forEach(function (s) {
+        if (s.barFrom == null) return;
+        for (let col = s.barFrom; col <= s.barTo; col += 1) {
+          if (occupied[s.row + ":" + col]) continue;
+          pieces.push('<div class="cell bar" style="grid-row:' + (s.row + 1) + ';grid-column:' + (3 + col) + '"></div>');
+        }
+      });
+      return '<div class="board-wrap"><div class="board" style="--cols:' + n + '">' + pieces.join("") + '</div></div>';
+    }
+
+    function bankHtml() {
+      const left = tiles.filter(function (tile) { return !used[tile.id]; });
+      return '<div class="row">' + left.map(function (tile) {
+        return '<button type="button" class="tile" data-tile="' + tile.id + '" data-value="' + tile.value + '">' + tile.value + '</button>';
+      }).join("") + '</div>';
+    }
+
+    function scoreHtml() {
+      return '<div class="stats"><div class="stat' + (score < 0 ? " bad" : "") + '"><b>' + score + '</b><span>Points</span></div><div class="stat' + (penalties ? " bad" : "") + '"><b>' + penalties + '</b><span>Penalties</span></div><div class="stat"><b>' + (step) + '/' + problem.steps.length + '</b><span>Placed</span></div></div>';
+    }
+
+    function briefHtml() {
+      const bestLine = best.score > 0 ? '<p class="strong">Best run saved: ' + best.score + ' points, ' + best.penalties + ' penalties.</p>' : "";
+      return '<div class="stack"><h1>Long division</h1><p class="muted">The digit-by-digit method. Divide, multiply, subtract, bring down. Left to right.</p>' +
+        callout("info", "How to play", "The dividend and the divisor are already written. Every other number is in the bank, mixed with a few that do not belong. Drag a number onto the green spot, or tap it. The right number is worth 10. A wrong number in that spot costs 5, and it can go below zero.") +
+        "<h2>The four moves</h2><p>1. Divide. How many times does the divisor fit, without going over? That digit goes above the digit you are dividing.</p><p>2. Multiply that digit by the divisor, and write it underneath.</p><p>3. Subtract. What is left stays in the column.</p><p>4. Bring down a copy of the next digit. It teams up with what is left. Then divide again.</p>" +
+        '<p class="muted">If the divisor does not fit into a digit, do not force it. Use the next digit too, or write 0 and bring down another one. That is the move in the video.</p>' +
+        '<p class="faint"><a href="https://www.youtube.com/watch?v=LGqBQrUYua4">Math Antics: Long Division</a></p>' +
+        '<p class="faint"><a href="index.html">Science game</a> · <a href="french.html">French game</a></p>' +
+        bestLine + buttons([["primary", "start", "Start with 936 ÷ 4"], ["secondary", "long", "The long one, 315,270 ÷ 5"]]) + "</div>";
+    }
+
+    function playHtml() {
+      const current = problem.steps[step];
+      const pills = PHASES.map(function (phase) {
+        return '<span class="pill' + (phase === current.phase ? " on" : "") + '">' + esc(phase) + '</span>';
+      }).join("");
+      const note = flash ? callout(flash.tone, flash.title, flash.body) : "";
+      return '<div class="stack"><div class="row spread"><div><h1>Long division</h1><p class="muted">Problem ' + (index + 1) + ' of ' + queue.length + ' · ' + commas(problem.dividend) + ' ÷ ' + problem.divisor + '</p></div>' + scoreHtml() + '</div>' +
+        '<div class="row">' + pills + '</div>' +
+        note + callout("info", current.phase, current.prompt) +
+        boardHtml() +
+        '<div class="bank"><h3>Numbers</h3><p class="faint">Drag one onto the green spot, or tap it. A wrong number costs 5.</p>' +
+        bankHtml() + '</div>' +
+        buttons([["ghost", "stop", "Stop here"]]) + "</div>";
+    }
+
+    function betweenHtml() {
+      const more = index + 1 < queue.length;
+      const actions = more
+        ? [["primary", "next", "Next problem"], ["ghost", "stop", "Stop here"]]
+        : [["primary", "stop", "Finish"]];
+      const bestLine = banner === "new" ? '<p class="strong">Saved as the best run in this browser.</p>' : banner === "kept" ? '<p class="strong">Best run stays ' + best.score + " points.</p>" : "";
+      return '<div class="stack"><h1>' + commas(problem.dividend) + ' ÷ ' + problem.divisor + '</h1><p>' + esc(resultLine(problem)) + '</p>' + scoreHtml() +
+        bestLine + callout("success", "The work checks", equation(problem) + ". The answer digit sits above the digit it came from.") +
+        boardHtml() + buttons(actions) + "</div>";
+    }
+
+    function doneHtml() {
+      const bestLine = banner === "new" ? '<p class="strong">Saved as the best run in this browser.</p>' : banner === "kept" ? '<p class="strong">Best run stays ' + best.score + " points, " + best.penalties + " penalties.</p>" : "";
+      return '<div class="stack"><h1>That is the method</h1><p class="muted">Divide, multiply, subtract, bring down. Then check by multiplying back.</p>' +
+        '<div class="stats"><div class="stat' + (score < 0 ? " bad" : "") + '"><b>' + score + '</b><span>Points</span></div><div class="stat"><b>' + penalties + '</b><span>Penalties</span></div></div>' +
+        bestLine +
+        '<p class="faint"><a href="index.html">Science game</a> · <a href="french.html">French game</a></p>' +
+        buttons([["primary", "start", "Practice again"], ["secondary", "long", "The long one, 315,270 ÷ 5"]]) + "</div>";
+    }
+
+    function render() {
+      document.querySelectorAll(".tile.ghost").forEach(function (el) { el.remove(); });
+      const key = page + ":" + index + ":" + (problem ? problem.dividend : "") + ":" + queue.length;
+      const changed = key !== viewKey;
+      if (page === "brief") app.innerHTML = briefHtml();
+      else if (page === "play") app.innerHTML = playHtml();
+      else if (page === "between") app.innerHTML = betweenHtml();
+      else app.innerHTML = doneHtml();
+      if (changed) window.scrollTo(0, 0);
+      viewKey = key;
+    }
+
+    function begin(list) {
+      queue = list;
+      index = 0;
+      score = 0;
+      penalties = 0;
+      loadStep(0);
+      page = "play";
+      render();
+    }
+
+    function loadStep(i) {
+      index = i;
+      problem = buildProblem(queue[i]);
+      step = 0;
+      misses = 0;
+      flash = null;
+      used = {};
+      tiles = makeTiles(problem, Math.floor(Math.random() * 1000000000) + 1);
+    }
+
+    function attempt(value, tileId) {
+      if (page !== "play") return;
+      const current = problem.steps[step];
+      if (value !== current.value) {
+        score -= 5;
+        penalties += 1;
+        misses += 1;
+        flash = {
+          tone: "warning",
+          title: "−5",
+          body: misses >= 2 ? current.reveal : "That number does not go there."
+        };
+        render();
+        return;
+      }
+      used[tileId] = true;
+      score += 10;
+      misses = 0;
+      flash = { tone: "success", title: "+10", body: "" };
+      step += 1;
+      if (step >= problem.steps.length) {
+        maybeSave();
+        page = "between";
+      }
+      render();
+    }
+
+    function placeFromPointer(clientX, clientY, value, tileId, moved) {
+      if (!moved) {
+        attempt(value, tileId);
+        return;
+      }
+      const hit = document.elementFromPoint(clientX, clientY);
+      const slot = hit && hit.closest("[data-slot]");
+      if (!slot) return;
+      if (slot.dataset.slot === "done") {
+        flash = { tone: "info", title: "Already filled", body: "Use the green spot. That is the step you are on." };
+        render();
+        return;
+      }
+      if (slot.dataset.slot !== "active") {
+        flash = { tone: "info", title: "Not yet", body: "Use the green spot. The other blanks come later." };
+        render();
+        return;
+      }
+      attempt(value, tileId);
+    }
+
+    app.addEventListener("pointerdown", function (event) {
+      const tile = event.target.closest("[data-tile]");
+      if (!tile || page !== "play") return;
+      event.preventDefault();
+      const rect = tile.getBoundingClientRect();
+      const ghost = tile.cloneNode(true);
+      ghost.classList.add("ghost");
+      ghost.style.left = rect.left + "px";
+      ghost.style.top = rect.top + "px";
+      ghost.style.width = rect.width + "px";
+      document.body.appendChild(ghost);
+      drag = {
+        id: tile.dataset.tile,
+        value: Number(tile.dataset.value),
+        dx: event.clientX - rect.left,
+        dy: event.clientY - rect.top,
+        x: event.clientX,
+        y: event.clientY,
+        moved: false,
+        ghost: ghost
+      };
+      tile.classList.add("lifting");
+      try { tile.setPointerCapture(event.pointerId); } catch (error) { /* the tap still lands */ }
+    });
+
+    app.addEventListener("pointermove", function (event) {
+      if (!drag) return;
+      if (Math.abs(event.clientX - drag.x) + Math.abs(event.clientY - drag.y) > 8) drag.moved = true;
+      drag.ghost.style.left = (event.clientX - drag.dx) + "px";
+      drag.ghost.style.top = (event.clientY - drag.dy) + "px";
+    });
+
+    function endDrag(event) {
+      if (!drag) return;
+      const info = drag;
+      drag = null;
+      info.ghost.remove();
+      document.querySelectorAll(".lifting").forEach(function (el) { el.classList.remove("lifting"); });
+      placeFromPointer(event.clientX, event.clientY, info.value, info.id, info.moved);
+    }
+
+    app.addEventListener("pointerup", endDrag);
+    app.addEventListener("pointercancel", endDrag);
+
+    app.addEventListener("click", function (event) {
+      const el = event.target.closest("[data-action]");
+      if (!el) return;
+      const action = el.dataset.action;
+      if (action === "start") begin(SET.slice());
+      else if (action === "long") begin([LONG_ONE]);
+      else if (action === "next") {
+        loadStep(index + 1);
+        page = "play";
+        render();
+      } else if (action === "stop") {
+        maybeSave();
+        page = "done";
+        render();
+      }
+    });
+
+    render();
+  </script>
+</body>
+</html>
