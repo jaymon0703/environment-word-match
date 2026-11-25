@@ -103,6 +103,11 @@
       background: #fff;
       color: var(--ink);
     }
+    .slot.open {
+      border-style: solid;
+      border-color: #b7c4bc;
+      background: #fff;
+    }
     .slot.on {
       border-style: solid;
       border-color: var(--green);
@@ -302,14 +307,24 @@
     }
     // @engine-end
 
+    const LEVELS = {
+      easy: "Hints on. One green spot. Whole numbers, such as 12.",
+      medium: "No hints. Same grid, same numbers, still one green spot.",
+      hard: "Every blank is open. The bank is single digits only."
+    };
+
     const app = document.querySelector("#app");
     let page = "brief";
+    let level = "easy";
+    let playedLevel = "easy";
     let queue = SET.slice();
     let index = 0;
     let problem = null;
     let step = 0;
     let tiles = [];
     let used = {};
+    let filled = {};
+    let picked = null;
     let score = 0;
     let penalties = 0;
     let misses = 0;
@@ -319,12 +334,21 @@
     let viewKey = "";
     let drag = null;
 
+    function emptyBest() {
+      return { score: 0, penalties: 0 };
+    }
+
     function loadBest() {
+      const fresh = { easy: emptyBest(), medium: emptyBest(), hard: emptyBest() };
       try {
         const saved = JSON.parse(localStorage.getItem("division-best") || "null");
-        if (saved && typeof saved.score === "number") return saved;
+        if (saved && typeof saved.score === "number") {
+          fresh.easy = saved;
+          return fresh;
+        }
+        if (saved && saved.easy && saved.medium && saved.hard) return saved;
       } catch (error) { /* keep the default */ }
-      return { score: 0, penalties: 0 };
+      return fresh;
     }
 
     function saveBest(next) {
@@ -333,10 +357,12 @@
     }
 
     function maybeSave() {
-      if (score > best.score) {
-        saveBest({ score: score, penalties: penalties });
+      const current = best[level];
+      if (score > current.score) {
+        best[level] = { score: score, penalties: penalties };
+        saveBest(best);
         banner = "new";
-      } else if (best.score > 0) banner = "kept";
+      } else if (current.score > 0) banner = "kept";
       else banner = "";
     }
 
@@ -372,8 +398,28 @@
     }
 
     function makeTiles(built, seed) {
-      const bag = built.steps.map(function (s, i) {
-        return { id: "n" + i, value: s.value };
+      const bag = [];
+      if (level === "hard") {
+        const needed = {};
+        let count = 0;
+        built.steps.forEach(function (s) {
+          String(s.value).split("").forEach(function (digit) {
+            const value = Number(digit);
+            bag.push({ id: "d" + count, value: value });
+            needed[value] = true;
+            count += 1;
+          });
+        });
+        let extra = 0;
+        for (let n = 0; n <= 9 && extra < 3; n += 1) {
+          if (needed[n]) continue;
+          bag.push({ id: "x" + extra, value: n });
+          extra += 1;
+        }
+        return shuffle(bag, seed);
+      }
+      built.steps.forEach(function (s, i) {
+        bag.push({ id: "n" + i, value: s.value });
       });
       const needed = {};
       built.steps.forEach(function (s) { needed[s.value] = true; });
@@ -415,7 +461,41 @@
       return answer + ". Check: " + equation(p) + ".";
     }
 
+    function viewCells() {
+      const cells = [];
+      problem.steps.forEach(function (s, i) {
+        if (level === "hard") {
+          String(s.value).split("").forEach(function (digit, d) {
+            cells.push({
+              id: i + ":" + d,
+              value: Number(digit),
+              row: s.row,
+              col: s.col + d,
+              span: 1,
+              bar: s.kind === "multiply"
+            });
+          });
+          return;
+        }
+        cells.push({
+          id: String(i),
+          value: s.value,
+          row: s.row,
+          col: s.col,
+          span: s.span,
+          bar: s.kind === "multiply"
+        });
+      });
+      return cells;
+    }
+
+    function cellFilled(cell, index) {
+      if (level === "hard") return filled[cell.id] === true;
+      return index < step;
+    }
+
     function litDigit(col) {
+      if (level === "hard") return true;
       const first = problem.steps[0].col;
       if (col <= first) return true;
       return problem.steps.some(function (s, i) {
@@ -425,9 +505,10 @@
 
     function boardHtml() {
       const n = problem.digits.length;
+      const cells = viewCells();
       const occupied = {};
-      problem.steps.forEach(function (s) {
-        for (let i = 0; i < s.span; i += 1) occupied[s.row + ":" + (s.col + i)] = true;
+      cells.forEach(function (cell) {
+        for (let i = 0; i < cell.span; i += 1) occupied[cell.row + ":" + (cell.col + i)] = true;
       });
       const pieces = [];
       pieces.push('<div class="cell given" style="grid-row:2;grid-column:1">' + problem.divisor + '</div>');
@@ -436,15 +517,25 @@
         const wait = litDigit(col) ? "" : " wait";
         pieces.push('<div class="cell given vinculum' + wait + '" style="grid-row:2;grid-column:' + (3 + col) + '">' + digit + '</div>');
       });
-      problem.steps.forEach(function (s, i) {
+      cells.forEach(function (cell, index) {
+        const done = cellFilled(cell, index);
+        const selected = level === "hard" ? picked === cell.id && !done : index === step;
         let cls = "cell slot";
-        if (i < step) cls += " done";
-        else if (i === step) cls += " on";
-        if (s.kind === "multiply") cls += " bar";
-        if (flash && flash.tone === "warning" && i === step) cls += " shake";
-        const state = i < step ? "done" : i === step ? "active" : "later";
-        const text = i < step ? esc(s.value) : "";
-        pieces.push('<div class="' + cls + '" data-slot="' + state + '" style="grid-row:' + (s.row + 1) + ';grid-column:' + (3 + s.col) + ' / span ' + s.span + '">' + text + '</div>');
+        let state = "later";
+        if (done) {
+          cls += " done";
+          state = "done";
+        } else if (selected) {
+          cls += " on";
+          state = "active";
+        } else if (level === "hard") {
+          cls += " open";
+          state = "open";
+        }
+        if (cell.bar) cls += " bar";
+        if (flash && flash.tone === "warning" && flash.cell === cell.id) cls += " shake";
+        const text = done ? esc(cell.value) : "";
+        pieces.push('<div class="' + cls + '" data-slot="' + state + '" data-id="' + cell.id + '" style="grid-row:' + (cell.row + 1) + ';grid-column:' + (3 + cell.col) + ' / span ' + cell.span + '">' + text + '</div>');
       });
       problem.steps.forEach(function (s) {
         if (s.barFrom == null) return;
@@ -463,14 +554,40 @@
       }).join("") + '</div>';
     }
 
+    function placedCount() {
+      if (level === "hard") return Object.keys(filled).length;
+      return step;
+    }
+
+    function placeTotal() {
+      if (level === "hard") return viewCells().length;
+      return problem.steps.length;
+    }
+
     function scoreHtml() {
-      return '<div class="stats"><div class="stat' + (score < 0 ? " bad" : "") + '"><b>' + score + '</b><span>Points</span></div><div class="stat' + (penalties ? " bad" : "") + '"><b>' + penalties + '</b><span>Penalties</span></div><div class="stat"><b>' + (step) + '/' + problem.steps.length + '</b><span>Placed</span></div></div>';
+      return '<div class="stats"><div class="stat' + (score < 0 ? " bad" : "") + '"><b>' + score + '</b><span>Points</span></div><div class="stat' + (penalties ? " bad" : "") + '"><b>' + penalties + '</b><span>Penalties</span></div><div class="stat"><b>' + placedCount() + '/' + placeTotal() + '</b><span>Placed</span></div></div>';
+    }
+
+    function levelName(id) {
+      const which = id || level;
+      if (which === "medium") return "Medium";
+      if (which === "hard") return "Hard";
+      return "Easy";
+    }
+
+    function levelButtons() {
+      return '<div class="row">' + ["easy", "medium", "hard"].map(function (id) {
+        const name = id === "easy" ? "Easy" : id === "medium" ? "Medium" : "Hard";
+        return '<button class="btn ' + (id === level ? "primary" : "secondary") + '" data-action="level" data-level="' + id + '">' + name + '</button>';
+      }).join("") + '</div><p class="faint">' + esc(LEVELS[level]) + '</p>';
     }
 
     function briefHtml() {
-      const bestLine = best.score > 0 ? '<p class="strong">Best run saved: ' + best.score + ' points, ' + best.penalties + ' penalties.</p>' : "";
+      const record = best[level];
+      const bestLine = record.score > 0 ? '<p class="strong">Best on ' + levelName() + ': ' + record.score + ' points, ' + record.penalties + ' penalties.</p>' : "";
       return '<div class="stack"><h1>Long division</h1><p class="muted">The digit-by-digit method. Divide, multiply, subtract, bring down. Left to right.</p>' +
-        callout("info", "How to play", "The dividend and the divisor are already written. Every other number is in the bank, mixed with a few that do not belong. Drag a number onto the green spot, or tap it. The right number is worth 10. A wrong number in that spot costs 5, and it can go below zero.") +
+        "<h2>Level</h2>" + levelButtons() +
+        callout("info", "How to play", "The dividend and the divisor are already written. Drag a number onto a blank, or tap it. The right number is worth 10. A wrong number in that spot costs 5, and it can go below zero. Easy tells you the next move. Medium keeps the same grid and the same numbers, with no hints. Hard opens every blank and gives you only digits.") +
         "<h2>The four moves</h2><p>1. Divide. How many times does the divisor fit, without going over? That digit goes above the digit you are dividing.</p><p>2. Multiply that digit by the divisor, and write it underneath.</p><p>3. Subtract. What is left stays in the column.</p><p>4. Bring down a copy of the next digit. It teams up with what is left. Then divide again.</p>" +
         '<p class="muted">If the divisor does not fit into a digit, do not force it. Use the next digit too, or write 0 and bring down another one. That is the move in the video.</p>' +
         '<p class="faint"><a href="https://www.youtube.com/watch?v=LGqBQrUYua4">Math Antics: Long Division</a></p>' +
@@ -479,16 +596,24 @@
     }
 
     function playHtml() {
-      const current = problem.steps[step];
-      const pills = PHASES.map(function (phase) {
-        return '<span class="pill' + (phase === current.phase ? " on" : "") + '">' + esc(phase) + '</span>';
-      }).join("");
       const note = flash ? callout(flash.tone, flash.title, flash.body) : "";
-      return '<div class="stack"><div class="row spread"><div><h1>Long division</h1><p class="muted">Problem ' + (index + 1) + ' of ' + queue.length + ' · ' + commas(problem.dividend) + ' ÷ ' + problem.divisor + '</p></div>' + scoreHtml() + '</div>' +
-        '<div class="row">' + pills + '</div>' +
-        note + callout("info", current.phase, current.prompt) +
+      let guide = "";
+      if (level === "easy") {
+        const current = problem.steps[step];
+        const pills = PHASES.map(function (phase) {
+          return '<span class="pill' + (phase === current.phase ? " on" : "") + '">' + esc(phase) + '</span>';
+        }).join("");
+        guide = '<div class="row">' + pills + '</div>' + note + callout("info", current.phase, current.prompt);
+      } else if (level === "medium") {
+        guide = note + '<p class="faint">No hints. Put the next number in the green spot.</p>';
+      } else {
+        guide = note + '<p class="faint">Every blank is open. Drag a digit onto one, or tap a blank and then a digit.</p>';
+      }
+      const bankTitle = level === "hard" ? "Digits" : "Numbers";
+      return '<div class="stack"><div class="row spread"><div><h1>Long division</h1><p class="muted">' + levelName() + ' · Problem ' + (index + 1) + ' of ' + queue.length + ' · ' + commas(problem.dividend) + ' ÷ ' + problem.divisor + '</p></div>' + scoreHtml() + '</div>' +
+        guide +
         boardHtml() +
-        '<div class="bank"><h3>Numbers</h3><p class="faint">Drag one onto the green spot, or tap it. A wrong number costs 5.</p>' +
+        '<div class="bank"><h3>' + bankTitle + '</h3><p class="faint">A wrong drop costs 5.</p>' +
         bankHtml() + '</div>' +
         buttons([["ghost", "stop", "Stop here"]]) + "</div>";
     }
@@ -498,15 +623,16 @@
       const actions = more
         ? [["primary", "next", "Next problem"], ["ghost", "stop", "Stop here"]]
         : [["primary", "stop", "Finish"]];
-      const bestLine = banner === "new" ? '<p class="strong">Saved as the best run in this browser.</p>' : banner === "kept" ? '<p class="strong">Best run stays ' + best.score + " points.</p>" : "";
+      const bestLine = banner === "new" ? '<p class="strong">Saved as the best ' + levelName(playedLevel) + ' run in this browser.</p>' : banner === "kept" ? '<p class="strong">Best ' + levelName(playedLevel) + ' run stays ' + best[playedLevel].score + " points.</p>" : "";
       return '<div class="stack"><h1>' + commas(problem.dividend) + ' ÷ ' + problem.divisor + '</h1><p>' + esc(resultLine(problem)) + '</p>' + scoreHtml() +
         bestLine + callout("success", "The work checks", equation(problem) + ". The answer digit sits above the digit it came from.") +
         boardHtml() + buttons(actions) + "</div>";
     }
 
     function doneHtml() {
-      const bestLine = banner === "new" ? '<p class="strong">Saved as the best run in this browser.</p>' : banner === "kept" ? '<p class="strong">Best run stays ' + best.score + " points, " + best.penalties + " penalties.</p>" : "";
-      return '<div class="stack"><h1>That is the method</h1><p class="muted">Divide, multiply, subtract, bring down. Then check by multiplying back.</p>' +
+      const bestLine = banner === "new" ? '<p class="strong">Saved as the best ' + levelName(playedLevel) + ' run in this browser.</p>' : banner === "kept" ? '<p class="strong">Best ' + levelName(playedLevel) + ' run stays ' + best[playedLevel].score + " points, " + best[playedLevel].penalties + " penalties.</p>" : "";
+      return '<div class="stack"><h1>That is the method</h1><p class="muted">' + levelName(playedLevel) + '. Divide, multiply, subtract, bring down. Then check by multiplying back.</p>' +
+        levelButtons() +
         '<div class="stats"><div class="stat' + (score < 0 ? " bad" : "") + '"><b>' + score + '</b><span>Points</span></div><div class="stat"><b>' + penalties + '</b><span>Penalties</span></div></div>' +
         bestLine +
         '<p class="faint"><a href="index.html">Science game</a> · <a href="french.html">French game</a></p>' +
@@ -515,7 +641,7 @@
 
     function render() {
       document.querySelectorAll(".tile.ghost").forEach(function (el) { el.remove(); });
-      const key = page + ":" + index + ":" + (problem ? problem.dividend : "") + ":" + queue.length;
+      const key = page + ":" + level + ":" + index + ":" + (problem ? problem.dividend : "") + ":" + queue.length;
       const changed = key !== viewKey;
       if (page === "brief") app.innerHTML = briefHtml();
       else if (page === "play") app.innerHTML = playHtml();
@@ -526,6 +652,7 @@
     }
 
     function begin(list) {
+      playedLevel = level;
       queue = list;
       index = 0;
       score = 0;
@@ -542,20 +669,27 @@
       misses = 0;
       flash = null;
       used = {};
+      filled = {};
+      picked = null;
       tiles = makeTiles(problem, Math.floor(Math.random() * 1000000000) + 1);
     }
 
-    function attempt(value, tileId) {
+    function attempt(value, tileId, cellId) {
       if (page !== "play") return;
-      const current = problem.steps[step];
-      if (value !== current.value) {
+      const cells = viewCells();
+      const cell = level === "hard"
+        ? cells.find(function (item) { return item.id === cellId; })
+        : cells[step];
+      if (!cell || cellFilled(cell, step)) return;
+      if (value !== cell.value) {
         score -= 5;
         penalties += 1;
         misses += 1;
         flash = {
           tone: "warning",
           title: "−5",
-          body: misses >= 2 ? current.reveal : "That number does not go there."
+          body: level === "easy" && misses >= 2 ? problem.steps[step].reveal : level === "hard" ? "That digit does not go there." : "That number does not go there.",
+          cell: cell.id
         };
         render();
         return;
@@ -563,18 +697,48 @@
       used[tileId] = true;
       score += 10;
       misses = 0;
-      flash = { tone: "success", title: "+10", body: "" };
-      step += 1;
-      if (step >= problem.steps.length) {
-        maybeSave();
-        page = "between";
+      flash = { tone: "success", title: "+10", body: "", cell: cell.id };
+      if (level === "hard") {
+        filled[cell.id] = true;
+        if (picked === cell.id) picked = null;
+        if (cells.every(function (item) { return filled[item.id]; })) {
+          maybeSave();
+          page = "between";
+        }
+      } else {
+        step += 1;
+        if (step >= problem.steps.length) {
+          maybeSave();
+          page = "between";
+        }
       }
       render();
     }
 
     function placeFromPointer(clientX, clientY, value, tileId, moved) {
+      if (level === "hard") {
+        let cellId = picked;
+        if (moved) {
+          const hit = document.elementFromPoint(clientX, clientY);
+          const slot = hit && hit.closest("[data-slot]");
+          if (!slot) return;
+          if (slot.dataset.slot === "done") {
+            flash = { tone: "info", title: "Already filled", body: "Choose an open blank." };
+            render();
+            return;
+          }
+          cellId = slot.dataset.id;
+        }
+        if (!cellId) {
+          flash = { tone: "info", title: "Pick a blank", body: "Drag the digit onto a blank, or tap a blank first." };
+          render();
+          return;
+        }
+        attempt(value, tileId, cellId);
+        return;
+      }
       if (!moved) {
-        attempt(value, tileId);
+        attempt(value, tileId, null);
         return;
       }
       const hit = document.elementFromPoint(clientX, clientY);
@@ -590,7 +754,7 @@
         render();
         return;
       }
-      attempt(value, tileId);
+      attempt(value, tileId, slot.dataset.id);
     }
 
     app.addEventListener("pointerdown", function (event) {
@@ -638,10 +802,20 @@
     app.addEventListener("pointercancel", endDrag);
 
     app.addEventListener("click", function (event) {
+      const slot = event.target.closest("[data-slot]");
+      if (slot && page === "play" && level === "hard" && slot.dataset.slot !== "done") {
+        picked = slot.dataset.id;
+        flash = null;
+        render();
+        return;
+      }
       const el = event.target.closest("[data-action]");
       if (!el) return;
       const action = el.dataset.action;
-      if (action === "start") begin(SET.slice());
+      if (action === "level") {
+        level = el.dataset.level;
+        render();
+      } else if (action === "start") begin(SET.slice());
       else if (action === "long") begin([LONG_ONE]);
       else if (action === "next") {
         loadStep(index + 1);
